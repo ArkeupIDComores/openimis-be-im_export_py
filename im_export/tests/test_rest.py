@@ -9,11 +9,8 @@ from django.conf import settings
 from django.db import connection
 import json
 
-@dataclass
-class DummyContext:
-    """ Just because we need a context to generate. """
-    user: User
-    
+from core.models.openimis_graphql_test_case import BaseTestContext as DummyContext
+
 class ReportAPITests( APITestCase):
 
     admin_user = None
