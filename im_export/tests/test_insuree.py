@@ -79,6 +79,7 @@ class ImportInsureeTest(TestCase):
         
         dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         resource = InsureeResource(user=self.user)
+        #with Patch("ImportExportConfig.im_export_date_format", '%m/%d/%Y')
         with open(os.path.join(dir_path, 'tests/import_example.csv'), 'r') as f:
             imported_data = resource \
                 .validate_and_sort_dataset(Dataset(headers=InsureeResource.insuree_headers).load(f.read()))

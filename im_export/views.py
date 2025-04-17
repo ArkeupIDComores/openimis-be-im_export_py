@@ -6,16 +6,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from insuree.apps import InsureeConfig
 from .services import InsureeImportExportService
+from core.views import check_user_rights
 
 logger = logging.getLogger(__name__)
 
 
-def check_user_rights(rights):
-    class UserWithRights(IsAuthenticated):
-        def has_permission(self, request, view):
-            return super().has_permission(request, view) and request.user.has_perms(rights)
-
-    return UserWithRights
 
 
 @api_view(["POST"])

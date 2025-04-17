@@ -205,8 +205,8 @@ class InsureeResource(resources.ModelResource):
         @param queryset: Queryset to use for export, Default to full quetyset
         """
         super().__init__()
-        self._user = user
         self._queryset = queryset
+        self._user = user
 
     @classmethod
     def validate_and_sort_dataset(cls, dataset):
@@ -221,10 +221,9 @@ class InsureeResource(resources.ModelResource):
     def import_obj(self, instance, row, dry_run, **kwargs):
         instance.head = row['head']
         instance.current_village_id = row['village_id']
-
         if not instance.id:
             instance.card_issued = False
-            instance.audit_user_id = self._user.i_user.id
+        
 
         if not instance.head:
             family = Family.objects.all().filter(validity_to__isnull=True) \
@@ -239,15 +238,22 @@ class InsureeResource(resources.ModelResource):
         # important to be at the end
         super().import_obj(instance, row, dry_run, **kwargs)
 
-    def after_save_instance(self, instance, using_transactions, dry_run):
-        super().after_save_instance(instance, using_transactions, dry_run)
+    def after_save_instance(self, instance, row,  **kwargs):
+        super().after_save_instance(instance, row, **kwargs)
         if instance.head:
             # if not using_transactions and dry_run this code will cause changes in database on dry run
-            if using_transactions or not dry_run:
+            if not kwargs.get('using_transactions', False) or not kwargs.get('dry_run', False):
                 instance.family = self.create_family(instance)
                 instance.current_village = None
                 instance.save()
-
+    def before_save_instance(self, instance, row, **kwargs):
+        if hasattr(instance, 'audit_user_id'):
+            if self._user and self._user._u.id:
+                instance.audit_user_id = self._user._u.id
+            else:
+                instance.audit_user_id = -1
+                logger.warning(_("im_export.save_without_user"))
+        
     def create_family(self, instance):
         return Family.objects.create(**{
             'validity_from': datetime.now(),
