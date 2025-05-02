@@ -1,18 +1,7 @@
 import openpyxl
 from decimal import Decimal
 
-
-def parse_bank_file(file):
-    wb = openpyxl.load_workbook(file)
-    sheet = wb.active
-
-    first_rows = [row for row in sheet.iter_rows(min_row=1, max_row=10, values_only=True)]
-
-    if any("Txn. Date" in str(cell) for row in first_rows for cell in row if cell):
-        return parse_excel_exim(file)
-    else:
-        return parse_excel_bdc(file)
-
+ 
 
 # Fonction pour parser les fichier BDC
 def parse_excel_bdc(file):
