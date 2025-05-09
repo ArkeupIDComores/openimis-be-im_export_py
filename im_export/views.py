@@ -157,7 +157,9 @@ def import_bdc_bank(request):
                     "amount": tx["amount"],
                     "invoice_code": result["invoice_code"],
                     "payment_id": result["payment_id"],
+                    "premium_uuid": result.get("premium_uuid"),
                     "status": result["status"],
+                    "complete": result.get("premium_uuid") is not None
                 })
             except Exception as exc:
                 msg = (

@@ -7,9 +7,13 @@ import openpyxl
 from decimal import Decimal
 from invoice.models import Invoice, PaymentInvoice, DetailPaymentInvoice, InvoiceEvent
 from insuree.models import Insuree, Family
+from contribution.models import Premium
+from policy.models import Policy
+from payer.models import Payer
 from datetime import datetime
 from uuid import uuid4
 from django.contrib.contenttypes.models import ContentType
+from contribution.services import update_or_create_premium 
 
 logger = logging.getLogger(__name__)
 
@@ -319,7 +323,7 @@ class BankImportService:
             date_payment=payment_date,
             payment_origin=payment_origin,
             payer_ref=payer_ref,
-            payer_name=None
+            payer_name=payer_ref
         )
         payment_invoice.save(username=self._user.username)
 
@@ -344,11 +348,45 @@ class BankImportService:
             event_type=InvoiceEvent.EventType.PAYMENT,
             message=f"Paiement reçu pour l'assuré {chf_id}, montant {amount_received} KMF pour la date du {payment_date.strftime('%d/%m/%Y')}"
         )
-
+        
+        premium = self.create_premium(chf_id, payment_invoice)
         return {
             "invoice_code": invoice.code,
             "payment_id": payment_invoice.id,
             "detail_payment_id": detail_payment.id,
+            "premium_uuid": str(premium.uuid) if premium else None,
             "status": "RECONCILIATED",
             "amount": str(invoice.amount_total),
         }
+
+    def create_premium(self, chf_id, data):
+        try:
+            insuree = Insuree.objects.get(chf_id=chf_id, validity_to__isnull=True)
+            family = Family.objects.get(head_insuree=insuree, validity_to__isnull=True)
+            policy = Policy.objects.filter(
+                family=family, validity_to__isnull=True, status=Policy.STATUS_IDLE,
+            ).order_by("start_date").first()
+
+            if policy:
+                payer = Payer.objects.filter(type='C').first()
+                
+                premium_data = {
+                    "audit_user_id": self._user.id,
+                    "receipt": data.code_receipt,
+                    "pay_date": data.date_payment,
+                    "pay_type": "B",
+                    "is_photo_fee": False,
+                    "amount": data.amount_received,
+                    "policy": policy,
+                    "payer": payer
+                }
+                
+                premium = Premium(**premium_data)
+                created = update_or_create_premium(premium, self._user)
+                logger.info(f"Contribution créée avec succès pour police {policy.id}")
+                return created
+            else:
+                logger.warning(f"Aucune police active trouvée pour la famille {family.id}")
+        except Exception as e:
+            logger.exception(f"Erreur lors de la création de contribution pour CHFID {chf_id}: {e}")
+    
