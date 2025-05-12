@@ -162,15 +162,16 @@ def import_bdc_bank(request):
                     "complete": result.get("premium_uuid") is not None
                 })
             except Exception as exc:
+                chfid = tx.get("insuree_chf_id", "").strip()
+                
                 msg = (
                     f"Erreur lors du traitement de la transaction ligne {idx} : {type(exc).__name__} - {str(exc)}. "
                     f"CHFID='{chfid}', Montant='{tx.get('amount_received', 'N/A')}', "
                     f"Date paiement='{tx.get('date_payment', 'N/A')}', Référence='{tx.get('code_ext', 'N/A')}'."
-                )
-
+                ) 
                 errors.append(msg)
                 logger.warning(msg)
-                chfid = tx.get("insuree_chf_id", "").strip()
+                
                 try:
                     invoice = service.find_invoice(chfid)
                     if invoice:

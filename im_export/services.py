@@ -153,7 +153,7 @@ class BankImportService:
                     raise ValueError("Montant manquant ou vide")
 
                 # Nettoyage du montant
-                amount_str = str(amount_raw).replace(".", "").replace(",", ".").replace(" ", "")
+                amount_str = str(amount_raw).replace(",", ".").replace(" ", "")
                 amount = Decimal(amount_str)    
 
                 if amount > 0:
