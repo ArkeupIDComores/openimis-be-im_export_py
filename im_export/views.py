@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from insuree.apps import InsureeConfig
-from .services import InsureeImportExportService, BankImportService
+from .services import InsureeImportExportService, BankImportService, FamilyImportExportService
 from rest_framework import status
 from .serializers import BankImportUploadSerializer
 from .models import BankImport 
@@ -32,8 +32,11 @@ def import_insurees(request):
         dry_run = json.loads(request.POST.get('dry_run', 'false'))
         strategy = request.POST.get('strategy', InsureeImportExportService.Strategy.INSERT)
 
-        success, totals, errors = InsureeImportExportService(user) \
-            .import_insurees(import_file, dry_run=dry_run, strategy=strategy)
+        # success, totals, errors = InsureeImportExportService(user) \
+        #     .import_insurees(import_file, dry_run=dry_run, strategy=strategy)
+        # return JsonResponse(data={'success': success, 'data': totals, 'errors': errors})
+        success, totals, errors = FamilyImportExportService(user) \
+            .import_families(import_file, dry_run=dry_run, strategy=strategy)
         return JsonResponse(data={'success': success, 'data': totals, 'errors': errors})
     except ValueError as e:
         logger.error("Error while importing insurees", exc_info=e)
