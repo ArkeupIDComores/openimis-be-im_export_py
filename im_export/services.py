@@ -7,13 +7,21 @@ import openpyxl
 from decimal import Decimal
 from invoice.models import Invoice, PaymentInvoice, DetailPaymentInvoice, InvoiceEvent
 from insuree.models import Insuree, Family
+from insuree.services import FamilyService, InsureeService
 from contribution.models import Premium
 from policy.models import Policy
 from payer.models import Payer
 from datetime import datetime
 from uuid import uuid4
 from django.contrib.contenttypes.models import ContentType
-from contribution.services import update_or_create_premium 
+from contribution.services import update_or_create_premium
+from collections import defaultdict
+from location.models import Location
+from django.db.models import Q
+from datetime import datetime as py_datetime
+from core.datetimes.shared import datetimedelta
+from contribution_plan.models import ContributionPlan
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +130,331 @@ class InsureeImportExportService:
                 for error in row_error:
                     errors.append(f"row ({index}) - {error.error}")
         return errors
+
+
+class FamilyImportExportService:
+    supported_content_types = {
+        'xls': 'application/vnd.ms-excel',
+        'csv': 'text/csv',
+        'json': 'application/json',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }
+
+    class Strategy:
+        INSERT = 'INSERT'
+        UPDATE = 'UPDATE'
+        INSERT_UPDATE = "INSERT_UPDATE"
+
+    supported_strategies = (Strategy.INSERT, Strategy.UPDATE, Strategy.INSERT_UPDATE)
+
+    def __init__(self, user):
+        self._user = user
+        # self._resource = InsureeResource(user)
+
+    def export_families(self, export_format: str = 'csv') -> Tuple[str, Any]:
+        if export_format not in self.supported_content_types:
+            raise ValueError(f'Non-supported export format: {export_format}')
+
+        # All supported formats match Tablib attrs, to update if that's not valid anymore
+        return self.supported_content_types[export_format], \
+            getattr(self._resource.export(), export_format)
+
+    def import_families(self, import_file, dry_run: bool = False, strategy: str = Strategy.INSERT) \
+            -> Tuple[bool, Dict[str, int], List[str]]:
+
+        if not import_file:
+            return InsureeImportExportService._get_general_error('Missing import file')
+        if strategy not in self.supported_strategies:
+            return InsureeImportExportService._get_general_error(f'Non-supported strategy: {strategy}')
+
+        # Other strategies are not supported for now
+        if strategy in (InsureeImportExportService.Strategy.UPDATE, InsureeImportExportService.Strategy.INSERT_UPDATE):
+            strategy = InsureeImportExportService.Strategy.INSERT
+            logger.warning(f'Strategy {strategy} not currently supported, defaulting to {InsureeImportExportService.Strategy.INSERT}')
+
+        family_headers = ['Identification', 'Etatmatrimonial', 'Membresménage',
+       'Nom&prénom_membresménag', 'Sexe', 'Liendeparenté', 'Piècedidentité',
+       'NIN', 'Jourdenaissance', 'Moisdenaissance', 'Annéedenaissance', 'Âge',
+       'Formationou2', 'Typesdeformation', 'Maladieinvalidante_Non',
+       'Handicap_Non', 'CouvertureAssuranceMutuelle',
+       'Catégoriesprofessionnelles', 'Tailleménages', 'Scorestailledesménages',
+       'Revenus', 'Scoresrevenus', 'Scorestypeshabitation',
+       'Scorestotauxcatégorisation', 'Cotisationsfamilles', 'Unnamed: 25',
+       'île', 'milieuderésidence', 'Districtsanitaire', 'Commune', 'Localité',
+       'Taillefamille', 'Autresménage', 'Féminin', 'Masculin',
+       'Cotisationsautresménages', 'Cotisationstotales_ménages',
+       'Parts_Gouv&PTF_\nCotisationsFamilles',
+       'Parts_Gouv&PTF_\nCotisationsAutres ménagesdémunis',
+       'Parts_Gouv&PTF_\nCotisationsAutres ménagesVulnérables',
+       'Parts totaux_Gvt&PTF']
+        # Education, Relations, Profession, changer les chiffres de income levels
+        try:
+            if import_file.content_type == 'application/vnd.ms-excel':
+                data_set = Dataset(headers=family_headers).load(import_file.open(), 'xls')
+            elif import_file.content_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+                data_set = Dataset(headers=family_headers).load(import_file.open(), 'xlsx')
+            elif import_file.content_type == 'application/json':
+                data_set = Dataset(headers=family_headers).load(import_file.open())
+            else:
+                data_set = Dataset(headers=family_headers).load(import_file.read().decode())
+        except Exception as e:
+            return InsureeImportExportService._get_general_error('Failed to parse input file', e)
+        gender_dict = {
+            1: "M",
+            2: "F",
+            3: "O"
+        }
+        professional_situations = {
+            0: "Sans profession",
+            1: "Agriculteur exploitant/Pêcheur/Éleveur/ou Artisan",
+            2: "Commerçants et assimilés",
+            3: "Chef d'entreprise",
+            4: "Professionnel libéral",
+            5: "Enseignant",
+            6: "Enseignant chercheur",
+            7: "Médecin",
+            8: "Autre professionnel de Santé",
+            9: "Autorité de l'admin. publique",
+            10: "Employé de l'administration publique",
+            11: "Employé administratif ou commercial d'entreprise",
+            12: "Ingénieur et Technicien d'entreprise",
+            13: "Ingénieur et Technicien travaillant à compte propre",
+            14: "Clergé, religieux",
+            15: "Policier et militaire",
+            16: "Personnel de services directs aux particuliers",
+            17: "Artiste",
+            18: "Ouvrier",
+            19: "Retraité"
+        }
+        grouped = defaultdict(list)
+        today = py_datetime.today()
+        for row in data_set.dict:
+            grouped[row['Identification']].append(row)
+        try:
+            familycreated = 0
+            with transaction.atomic():
+                for identification, rows in grouped.items():
+                    logger.info(f"Memmbers for Identification = {identification}:")
+                    # Mise par Ordre de membre_de_menage ascendant en commencant par le chef de famille
+                    sorted_members = sorted(rows, key=lambda x: int(x['Membresménage']))
+                    parent_family = None
+                    for r in sorted_members:
+                        logger.info(parent_family)
+                        yob = r.get("Annéedenaissance")
+                        if yob is None or yob == "-999999999" or len(str(yob)) != 4 or yob == "":
+                            if r.get("Liendeparenté") != "":
+                                if int(r.get("Liendeparenté")) == 3:
+                                    years = 10
+                                elif int(r.get("Liendeparenté")) in [1, 2, 25]:
+                                    years = 30
+                                elif int(r.get("Liendeparenté")) in [21, 22, 23, 24]:
+                                    years = 40
+                                else:
+                                    years = 50
+                                yob = str(today - datetimedelta(
+                                    years=years
+                                )).split(" ")[0].split("-")[0]
+                        if r.get("Moisdenaissance") is None or str(r.get("Moisdenaissance")) in ["-999999999", ""]:
+                            mob = "01"
+                        else:
+                            mob = str(r.get("Moisdenaissance"))
+                            mob = mob.zfill(2)# 1 becomes 01
+                            if len(mob) != 2:
+                                mob = "01"
+                        if r.get("Jourdenaissance") is None or str(r.get("Jourdenaissance")) in ["-999999999", ""]:
+                            dob = "01"
+                        else:
+                            dob = str(r.get("Jourdenaissance"))
+                            dob = dob.zfill(2) # 1 becomes 01
+                            if len(dob) != 2:
+                                dob = "01"
+                        village = r.get("Localité")
+                        if village == "" or village is None:
+                            village = 1
+                        current_village_id = Location.objects.filter(
+                            Q(code=village) | Q(name=village)).filter(
+                                validity_to__isnull=True, type='V').first()
+                        if not current_village_id:
+                            current_village_id = Location.objects.filter(
+                                validity_to__isnull=True, type='V').first().id
+                        current_gender = gender_dict.get(3)
+                        if r.get("Sexe") is not None and int(r.get("Sexe")) in [1, 2]:
+                            current_gender = gender_dict.get(int(r.get("Sexe")))
+                        nin_ok = False
+                        if r.get("NIN") is not None and r.get("NIN") != "":
+                            nin = str(r.get("NIN")).replace(" ", "")
+                            if len(nin) == 7 or (len(nin)==9 and nin.startswith("UG")):
+                                nin_ok = True
+                        card_issued = True
+                        if r.get("Piècedidentité") is not None:
+                            if not nin_ok or int(r.get("Piècedidentité")) != 1:
+                                card_issued = False
+                        marital = r.get("Etatmatrimonial")
+                        head = False
+                        if marital is None and marital != "":
+                            marital = int(marital)
+                            head = True if marital != 2 else False
+                        else:
+                            marital = 1
+                        head_insuree_data = {
+                            "last_name": r.get("Nom&prénom_membresménag") if r.get("Nom&prénom_membresménag")\
+                                is not None else " ",
+                            "other_names": " ",
+                            "gender_id": current_gender,
+                            "dob": yob + "-" + mob + "-" + dob,
+                            "head": head,
+                            "marital": marital,
+                            "passport": nin,
+                            "current_village_id": current_village_id,
+                            "card_issued": card_issued,
+                            "audit_user_id": self._user._u.id
+                        }
+                        if r.get("Revenus") is not None and r.get("Revenus") != "":
+                            head_insuree_data["income_level_id"] = int(r.get("Revenus"))
+                        if r.get("Liendeparenté") is not None and r.get("Liendeparenté") != "":
+                            head_insuree_data["relationship_id"] = int(r.get("Liendeparenté"))
+                        if r.get("Catégoriesprofessionnelles") is not None and r.get("Catégoriesprofessionnelles") != "":
+                            head_insuree_data["professional_situation"] = professional_situations.get(
+                                int(r.get("Catégoriesprofessionnelles"))
+                                )
+                        #    head_insuree_data["profession_id"] = int(r.get("Catégoriesprofessionnelles"))
+                        if r.get("Typesdeformation") is not None and r.get("Typesdeformation") != "":
+                            head_insuree_data["education_id"] = int(r.get("Typesdeformation"))
+                        jsonext = {}
+                        jsonext.update({
+                            "data": {
+                                "head_insuree": head_insuree_data,
+                                "family_level": "2" if marital == 2 else "1",
+                                "location_id": current_village_id,
+                                "family_type_id": "P" if marital == 2 else "H",
+                            }
+                        })
+                        family_data = {
+                            "head_insuree": head_insuree_data,
+                            "family_level": "2" if marital == 2 else "1",
+                            "location_id": current_village_id,
+                            "family_type_id": "P" if marital == 2 else "H",
+                            "json_ext": str(jsonext)
+                        }
+                        logger.info(f"family_data {family_data}" )
+                        if not parent_family:
+                            # Pas de famille donc on cree direct vu que les membre menages sont en ordre
+                            # c'est le premier niveau de famille ici
+                            parent_family = FamilyService(self._user).create_or_update(family_data)
+                            logger.info(f"family created {parent_family}")
+                            familycreated += 1
+                            amount_family = False
+                            if r.get("Cotisationstotales_ménages") is not None and r.get("Cotisationstotales_ménages") != "":
+                                try:
+                                    amount_family = Decimal(r.get("Cotisationstotales_ménages"))
+                                except:
+                                    logger.info("Could not parse the familly contribtion amount %s",
+                                        r.get("Cotisationstotales_ménages"))
+                            contribution_plan_code = False
+                            current_contribution = False
+                            policy_data = {}
+                            if amount_family == 5000:
+                                contribution_plan_code = "AMOS"
+                            if amount_family == 3500:
+                                contribution_plan_code = "AMOS1"
+                            if amount_family == 2500:
+                                contribution_plan_code = "AMOS2"
+                            if amount_family == 2000:
+                                contribution_plan_code = "AMOS3"
+                            if amount_family == 1500:
+                                contribution_plan_code = "AMOS4"
+                            if amount_family == 0:
+                                contribution_plan_code = "AMS"
+                            if contribution_plan_code:
+                                current_contribution = ContributionPlan.objects.filter(
+                                    code=contribution_plan_code
+                                ).first()
+                                if current_contribution and contribution_plan_code:
+                                    policy_data = {
+                                        "enroll_date": today.date(),
+                                        "start_date": today.date(),
+                                        "status": Policy.STATUS_ACTIVE,
+                                        "contribution_plan_id": str(current_contribution.id),
+                                        "value": amount_family,
+                                        "audit_user_id": self._user._u.id,
+                                        "product_id": current_contribution.benefit_plan_id
+                                    }
+                            if marital != 2:
+                                # On cree la police pour la famille si c'est pas poligame
+                                # si c'est poligame c'est la sous famille qui aura la police
+                                if current_contribution and contribution_plan_code:
+                                    policy_data["family_id"] = parent_family.id
+                                    logger.info("Creation police pour la famille %s", parent_family.id)
+                                    policy_created = Policy.objects.create(**policy_data)
+                                    logger.info("policy_created %s", policy_created.id)
+                                    premium_data = {
+                                        "audit_user_id": self._user._u.id,
+                                        "receipt": f"receipt_{uuid4()}",
+                                        "pay_date": today.date(),
+                                        "pay_type": "B",
+                                        "is_photo_fee": False,
+                                        "amount": amount_family,
+                                        "policy_id": policy_created.id
+                                    }
+                                    premium = Premium(**premium_data)
+                                    created_premium = update_or_create_premium(premium, self._user)
+                                    logger.info("premium created %s", created_premium)
+                            if marital == 2:
+                                #polygamous with should create 1 subfamily
+                                jsonextsub = {}
+                                jsonextsub.update({
+                                    "family_data": {
+                                        "family_level": "1",
+                                        "location_id": current_village_id,
+                                        "family_type_id": "H",
+                                        "head_insuree_id": parent_family.head_insuree.id
+                                    }
+                                })
+                                sub_family_data = {
+                                    "family_level": "1",
+                                    "location_id": current_village_id,
+                                    "family_type_id": "H",
+                                    "parent_id": parent_family.id,
+                                    "json_ext": str(jsonextsub),
+                                    "head_insuree_id": parent_family.head_insuree.id
+                                }
+                                logger.info("Creating subfamilly for family %s", parent_family.id)
+                                sub_family = FamilyService(self._user).create_or_update(sub_family_data)
+                                familycreated += 1
+                                logger.info("sub family created %s", sub_family.id)
+                                policy_data["family_id"] = sub_family.id
+                                logger.info("Creation police pour la sous famille %s", sub_family.id)
+                                policy_created = Policy.objects.create(**policy_data)
+                                logger.info("sub family policy_created %s", policy_created)
+                                premium_data = {
+                                    "audit_user_id": self._user._u.id,
+                                    "receipt": f"receipt_{uuid4()}",
+                                    "pay_date": today.date(),
+                                    "pay_type": "B",
+                                    "is_photo_fee": False,
+                                    "amount": amount_family,
+                                    "policy_id": policy_created.id
+                                }
+                                premium = Premium(**premium_data)
+                                created_premium = update_or_create_premium(premium, self._user)
+                                logger.info("subfamily premium created %s", created_premium)
+                        else:
+                            # On ajoute l'assurée comme membre de la famille existante
+                            head_insuree_data["family_id"] = parent_family.id
+                            logger.info("creation assure simple pour la famille %s", parent_family)
+                            insuree = InsureeService(self._user).create_or_update(head_insuree_data)
+                            logger.info("Assuree cree %s", insuree)
+                    logger.info("creation groupe d'itentification ok.......")
+                logger.info("Fin du traitement d'import.......")
+        except Exception as e:
+            return InsureeImportExportService._get_general_error('FAILED TO IMPORT FILE: ', e)
+        totals = {
+            'sent': len(data_set),
+            'created': familycreated,
+        }
+        errors = []
+        success = True
+        return success, totals, errors
 
 class BankImportService:
     
