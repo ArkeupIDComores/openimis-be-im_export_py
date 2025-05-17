@@ -310,7 +310,8 @@ class FamilyImportExportService:
                             "audit_user_id": self._user._u.id
                         }
                         if r.get("Revenus") is not None and r.get("Revenus") != "":
-                            head_insuree_data["income_level_id"] = int(r.get("Revenus"))
+                            head_insuree_data["income_level_id"] = int(r.get("Revenus")+1) #+1 parce que les revenus
+                            # en BD commencent a 1 et non 0
                         if r.get("Liendeparenté") is not None and r.get("Liendeparenté") != "":
                             head_insuree_data["relationship_id"] = int(r.get("Liendeparenté"))
                         if r.get("Catégoriesprofessionnelles") is not None and r.get("Catégoriesprofessionnelles") != "":
