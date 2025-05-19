@@ -285,7 +285,7 @@ class FamilyImportExportService:
                         nin_ok = False
                         nin = False
                         if r.get("NIN") is not None and r.get("NIN") != "":
-                            nin = str(r.get("NIN")).replace(" ", "")
+                            nin = str(r.get("NIN")).replace(" ", "").replace("#", "")
                             if len(nin) == 7 or (len(nin)==9 and nin.startswith("UG")):
                                 nin_ok = True
                         card_issued = True
