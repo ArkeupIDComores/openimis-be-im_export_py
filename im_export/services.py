@@ -173,20 +173,20 @@ class FamilyImportExportService:
             logger.warning(f'Strategy {strategy} not currently supported, defaulting to {InsureeImportExportService.Strategy.INSERT}')
 
         family_headers = ['Identification', 'Etatmatrimonial', 'Membresménage',
-       'Nom&prénom_membresménag', 'Sexe', 'Liendeparenté', 'Piècedidentité',
-       'NIN', 'Jourdenaissance', 'Moisdenaissance', 'Annéedenaissance', 'Âge',
-       'Formationou2', 'Typesdeformation', 'Maladieinvalidante_Non',
-       'Handicap_Non', 'CouvertureAssuranceMutuelle',
-       'Catégoriesprofessionnelles', 'Tailleménages', 'Scorestailledesménages',
-       'Revenus', 'Scoresrevenus', 'Scorestypeshabitation',
-       'Scorestotauxcatégorisation', 'Cotisationsfamilles', 'Unnamed: 25',
-       'île', 'milieuderésidence', 'Districtsanitaire', 'Commune', 'Localité',
+       'Nom&prénom_membresménag', 'Sexe', 'Lien de parenté', "Pièce d'identité",
+       'NIN', 'Jour de naissance', 'Mois de naissance', 'Année de naissance', 'Âge',
+       'Formation ou non', 'Types de formation', 'Maladie invalidante Non',
+       'Handicap Non', 'Couverture_Assurance_Mutuelle',
+       'Catégories_professionnelles', 'Tailleménages', 'Scores_taille_des_ménages',
+       'Revenus', 'Scores_revenus', 'Scores_types_habitation',
+       'Scores_totaux_catégorisation', 'Cotisationsfamilles', 'Cotisations_famille_chef_famille',
+       'île', 'milieu de résidence', 'District_sanitaire', 'Commune', 'Localité',
        'Taillefamille', 'Autresménage', 'Féminin', 'Masculin',
-       'Cotisationsautresménages', 'Cotisationstotales_ménages',
-       'Parts_Gouv&PTF_\nCotisationsFamilles',
-       'Parts_Gouv&PTF_\nCotisationsAutres ménagesdémunis',
-       'Parts_Gouv&PTF_\nCotisationsAutres ménagesVulnérables',
-       'Parts totaux_Gvt&PTF']
+       'Cotisationsautresménages', 'Cotisations_totales_ménages',
+       'PartsGouv_&_PTFCotisations Familles',
+       'PartsGouv_&_PTFCotisations_Autresménages_démunis',
+       'Parts Gouv & PTFCotisations_Autresménages_Vulnérables',
+       'Partstotaux_Gvt&PTF']
         # Education, Relations, Profession, changer les chiffres de income levels
         try:
             if import_file.content_type == 'application/vnd.ms-excel':
@@ -236,35 +236,37 @@ class FamilyImportExportService:
                 for identification, rows in grouped.items():
                     logger.info(f"Memmbers for Identification = {identification}:")
                     # Mise par Ordre de membre_de_menage ascendant en commencant par le chef de famille
-                    sorted_members = sorted(rows, key=lambda x: int(x['Membresménage']))
+                    sorted_members = sorted(rows, key=lambda x: int(x['Membresménage']) if x['Membresménage'] not in [None, ""] else -1)
                     parent_family = None
                     for r in sorted_members:
                         logger.info(parent_family)
-                        yob = r.get("Annéedenaissance")
+                        yob = r.get("Année de naissance")
                         if yob is None or yob == "-999999999" or len(str(yob)) != 4 or yob == "":
-                            if r.get("Liendeparenté") != "":
-                                if int(r.get("Liendeparenté")) == 3:
+                            if r.get("Lien de parenté") != "" and r.get("Lien de parenté") is not None:
+                                if int(r.get("Lien de parenté")) == 3:
                                     years = 10
-                                elif int(r.get("Liendeparenté")) in [1, 2, 25]:
+                                elif int(r.get("Lien de parenté")) in [1, 2, 25]:
                                     years = 30
-                                elif int(r.get("Liendeparenté")) in [21, 22, 23, 24]:
+                                elif int(r.get("Lien de parenté")) in [21, 22, 23, 24]:
                                     years = 40
                                 else:
                                     years = 50
                                 yob = str(today - datetimedelta(
                                     years=years
                                 )).split(" ")[0].split("-")[0]
-                        if r.get("Moisdenaissance") is None or str(r.get("Moisdenaissance")) in ["-999999999", ""]:
+                            else:
+                                yob = "1990"
+                        if r.get("Mois de naissance") is None or str(r.get("Mois de naissance")) in ["-999999999", ""]:
                             mob = "01"
                         else:
-                            mob = str(r.get("Moisdenaissance"))
+                            mob = str(r.get("Mois de naissance"))
                             mob = mob.zfill(2)# 1 becomes 01
                             if len(mob) != 2:
                                 mob = "01"
-                        if r.get("Jourdenaissance") is None or str(r.get("Jourdenaissance")) in ["-999999999", ""]:
+                        if r.get("Jour de naissance") is None or str(r.get("Jour de naissance")) in ["-999999999", ""]:
                             dob = "01"
                         else:
-                            dob = str(r.get("Jourdenaissance"))
+                            dob = str(r.get("Jour de naissance"))
                             dob = dob.zfill(2) # 1 becomes 01
                             if len(dob) != 2:
                                 dob = "01"
@@ -281,17 +283,18 @@ class FamilyImportExportService:
                         if r.get("Sexe") is not None and int(r.get("Sexe")) in [1, 2]:
                             current_gender = gender_dict.get(int(r.get("Sexe")))
                         nin_ok = False
+                        nin = False
                         if r.get("NIN") is not None and r.get("NIN") != "":
                             nin = str(r.get("NIN")).replace(" ", "")
                             if len(nin) == 7 or (len(nin)==9 and nin.startswith("UG")):
                                 nin_ok = True
                         card_issued = True
-                        if r.get("Piècedidentité") is not None:
-                            if not nin_ok or int(r.get("Piècedidentité")) != 1:
+                        if r.get("Pièce d'identité") is not None and r.get("Pièce d'identité") != "":
+                            if not nin_ok or int(r.get("Pièce d'identité")) != 1:
                                 card_issued = False
                         marital = r.get("Etatmatrimonial")
                         head = False
-                        if marital is None and marital != "":
+                        if marital is not None and marital != "":
                             marital = int(marital)
                             head = True if marital != 2 else False
                         else:
@@ -304,23 +307,24 @@ class FamilyImportExportService:
                             "dob": yob + "-" + mob + "-" + dob,
                             "head": head,
                             "marital": marital,
-                            "passport": nin,
                             "current_village_id": current_village_id,
                             "card_issued": card_issued,
                             "audit_user_id": self._user._u.id
                         }
+                        if nin is not False:
+                            head_insuree_data["passport"] = nin
                         if r.get("Revenus") is not None and r.get("Revenus") != "":
                             head_insuree_data["income_level_id"] = int(r.get("Revenus"))+1 #+1 parce que les revenus
                             # en BD commencent a 1 et non 0
-                        if r.get("Liendeparenté") is not None and r.get("Liendeparenté") != "":
-                            head_insuree_data["relationship_id"] = int(r.get("Liendeparenté"))
-                        if r.get("Catégoriesprofessionnelles") is not None and r.get("Catégoriesprofessionnelles") != "":
+                        if r.get("Lien de parenté") is not None and r.get("Lien de parenté") != "":
+                            head_insuree_data["relationship_id"] = int(r.get("Lien de parenté"))
+                        if r.get("Catégories_professionnelles") is not None and r.get("Catégories_professionnelles") != "":
                             head_insuree_data["professional_situation"] = professional_situations.get(
-                                int(r.get("Catégoriesprofessionnelles"))
+                                int(r.get("Catégories_professionnelles"))
                                 )
-                        #    head_insuree_data["profession_id"] = int(r.get("Catégoriesprofessionnelles"))
-                        if r.get("Typesdeformation") is not None and r.get("Typesdeformation") != "":
-                            head_insuree_data["education_id"] = int(r.get("Typesdeformation"))
+                        #    head_insuree_data["profession_id"] = int(r.get("Catégories_professionnelles"))
+                        if r.get("Types de formation") is not None and r.get("Types de formation") != "":
+                            head_insuree_data["education_id"] = int(r.get("Types de formation"))
                         jsonext = {}
                         jsonext.update({
                             "data": {
@@ -345,12 +349,12 @@ class FamilyImportExportService:
                             logger.info(f"family created {parent_family}")
                             familycreated += 1
                             amount_family = False
-                            if r.get("Cotisationstotales_ménages") is not None and r.get("Cotisationstotales_ménages") != "":
+                            if r.get("Cotisations_totales_ménages") is not None and r.get("Cotisations_totales_ménages") != "":
                                 try:
-                                    amount_family = Decimal(r.get("Cotisationstotales_ménages"))
+                                    amount_family = Decimal(r.get("Cotisations_totales_ménages"))
                                 except:
                                     logger.info("Could not parse the familly contribtion amount %s",
-                                        r.get("Cotisationstotales_ménages"))
+                                        r.get("Cotisations_totales_ménages"))
                             contribution_plan_code = False
                             current_contribution = False
                             policy_data = {}
@@ -368,7 +372,7 @@ class FamilyImportExportService:
                                 contribution_plan_code = "AMS"
                             if contribution_plan_code:
                                 current_contribution = ContributionPlan.objects.filter(
-                                    code=contribution_plan_code
+                                    code="test"
                                 ).first()
                                 if current_contribution and contribution_plan_code:
                                     policy_data = {
