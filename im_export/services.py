@@ -372,7 +372,7 @@ class FamilyImportExportService:
                                 contribution_plan_code = "AMS"
                             if contribution_plan_code:
                                 current_contribution = ContributionPlan.objects.filter(
-                                    code="test"
+                                    code=contribution_plan_code
                                 ).first()
                                 if current_contribution and contribution_plan_code:
                                     policy_data = {
