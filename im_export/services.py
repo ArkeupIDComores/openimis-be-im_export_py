@@ -255,7 +255,9 @@ class FamilyImportExportService:
                                     years=years
                                 )).split(" ")[0].split("-")[0]
                             else:
-                                yob = "1990"
+                                yob = str(today - datetimedelta(
+                                    years=50
+                                )).split(" ")[0].split("-")[0]
                         if r.get("Mois de naissance") is None or str(r.get("Mois de naissance")) in ["-999999999", ""]:
                             mob = "01"
                         else:
@@ -304,14 +306,14 @@ class FamilyImportExportService:
                                 is not None else " ",
                             "other_names": " ",
                             "gender_id": current_gender,
-                            "dob": yob + "-" + mob + "-" + dob,
+                            "dob": str(yob) + "-" + str(mob) + "-" + str(dob),
                             "head": head,
                             "marital": marital,
                             "current_village_id": current_village_id,
                             "card_issued": card_issued,
                             "audit_user_id": self._user._u.id
                         }
-                        if nin is not False:
+                        if nin is not False and nin_ok:
                             head_insuree_data["passport"] = nin
                         if r.get("Revenus") is not None and r.get("Revenus") != "":
                             head_insuree_data["income_level_id"] = int(r.get("Revenus"))+1 #+1 parce que les revenus
@@ -427,22 +429,23 @@ class FamilyImportExportService:
                                 sub_family = FamilyService(self._user).create_or_update(sub_family_data)
                                 familycreated += 1
                                 logger.info("sub family created %s", sub_family.id)
-                                policy_data["family_id"] = sub_family.id
-                                logger.info("Creation police pour la sous famille %s", sub_family.id)
-                                policy_created = Policy.objects.create(**policy_data)
-                                logger.info("sub family policy_created %s", policy_created)
-                                premium_data = {
-                                    "audit_user_id": self._user._u.id,
-                                    "receipt": f"receipt_{uuid4()}",
-                                    "pay_date": today.date(),
-                                    "pay_type": "B",
-                                    "is_photo_fee": False,
-                                    "amount": amount_family,
-                                    "policy_id": policy_created.id
-                                }
-                                premium = Premium(**premium_data)
-                                created_premium = update_or_create_premium(premium, self._user)
-                                logger.info("subfamily premium created %s", created_premium)
+                                if current_contribution and contribution_plan_code:
+                                    policy_data["family_id"] = sub_family.id
+                                    logger.info("Creation police pour la sous famille %s", sub_family.id)
+                                    policy_created = Policy.objects.create(**policy_data)
+                                    logger.info("sub family policy_created %s", policy_created)
+                                    premium_data = {
+                                        "audit_user_id": self._user._u.id,
+                                        "receipt": f"receipt_{uuid4()}",
+                                        "pay_date": today.date(),
+                                        "pay_type": "B",
+                                        "is_photo_fee": False,
+                                        "amount": amount_family,
+                                        "policy_id": policy_created.id
+                                    }
+                                    premium = Premium(**premium_data)
+                                    created_premium = update_or_create_premium(premium, self._user)
+                                    logger.info("subfamily premium created %s", created_premium)
                         else:
                             # On ajoute l'assurée comme membre de la famille existante
                             head_insuree_data["family_id"] = parent_family.id
