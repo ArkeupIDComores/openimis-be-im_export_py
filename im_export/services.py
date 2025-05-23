@@ -10,6 +10,8 @@ from insuree.models import Insuree, Family
 from insuree.services import FamilyService, InsureeService
 from contribution.models import Premium
 from policy.models import Policy
+from policy.services import PolicyService
+from core.models import Officer
 from payer.models import Payer
 from datetime import datetime
 from uuid import uuid4
@@ -377,6 +379,10 @@ class FamilyImportExportService:
                                     code=contribution_plan_code
                                 ).first()
                                 if current_contribution and contribution_plan_code:
+                                    officer = Officer.objects.filter(code=self._user._u.login_name,
+                                                                     validity_to__isnull=True).first()
+                                    if not officer:
+                                        officer = Officer.objects.filter(validity_to__isnull=True).first()
                                     policy_data = {
                                         "enroll_date": today.date(),
                                         "start_date": today.date(),
@@ -384,7 +390,10 @@ class FamilyImportExportService:
                                         "contribution_plan_id": str(current_contribution.id),
                                         "value": amount_family,
                                         "audit_user_id": self._user._u.id,
-                                        "product_id": current_contribution.benefit_plan_id
+                                        "product_id": current_contribution.benefit_plan_id,
+                                        "periodicity": "M",
+                                        "payment_day": 5,
+                                        "officer_id": officer.id
                                     }
                             if marital != 2:
                                 # On cree la police pour la famille si c'est pas poligame
@@ -392,7 +401,7 @@ class FamilyImportExportService:
                                 if current_contribution and contribution_plan_code:
                                     policy_data["family_id"] = parent_family.id
                                     logger.info("Creation police pour la famille %s", parent_family.id)
-                                    policy_created = Policy.objects.create(**policy_data)
+                                    policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
                                     logger.info("policy_created %s", policy_created.id)
                                     premium_data = {
                                         "audit_user_id": self._user._u.id,
@@ -432,7 +441,7 @@ class FamilyImportExportService:
                                 if current_contribution and contribution_plan_code:
                                     policy_data["family_id"] = sub_family.id
                                     logger.info("Creation police pour la sous famille %s", sub_family.id)
-                                    policy_created = Policy.objects.create(**policy_data)
+                                    policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
                                     logger.info("sub family policy_created %s", policy_created)
                                     premium_data = {
                                         "audit_user_id": self._user._u.id,
