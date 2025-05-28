@@ -362,18 +362,31 @@ class FamilyImportExportService:
                             contribution_plan_code = False
                             current_contribution = False
                             policy_data = {}
+                            periodicity = "M"
+                            if amount_family == 15000:
+                                contribution_plan_code = "AMOG"
+                                periodicity = "M"
+                            if amount_family == 10000:
+                                contribution_plan_code = "AMOE"
+                                periodicity = "M"
                             if amount_family == 5000:
                                 contribution_plan_code = "AMOS"
+                                periodicity = "M"
                             if amount_family == 3500:
                                 contribution_plan_code = "AMOS1"
+                                periodicity = "Q"
                             if amount_family == 2500:
                                 contribution_plan_code = "AMOS2"
+                                periodicity = "Q"
                             if amount_family == 2000:
                                 contribution_plan_code = "AMOS3"
+                                periodicity = "Q"
                             if amount_family == 1500:
                                 contribution_plan_code = "AMOS4"
+                                periodicity = "Q"
                             if amount_family == 0:
                                 contribution_plan_code = "AMS"
+                                periodicity = "Y"
                             if contribution_plan_code:
                                 current_contribution = ContributionPlan.objects.filter(
                                     code=contribution_plan_code
@@ -391,7 +404,7 @@ class FamilyImportExportService:
                                         "value": amount_family,
                                         "audit_user_id": self._user._u.id,
                                         "product_id": current_contribution.benefit_plan_id,
-                                        "periodicity": "M",
+                                        "periodicity": periodicity,
                                         "payment_day": 5,
                                         "officer_id": officer.id
                                     }
