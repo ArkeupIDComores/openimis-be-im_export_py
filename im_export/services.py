@@ -279,7 +279,7 @@ class FamilyImportExportService:
                             village = 1
                         current_village_id = Location.objects.filter(
                             Q(code=village) | Q(name=village)).filter(
-                                validity_to__isnull=True, type='V').first()
+                                validity_to__isnull=True, type='V').first().id
                         if not current_village_id:
                             current_village_id = Location.objects.filter(
                                 validity_to__isnull=True, type='V').first().id
