@@ -620,15 +620,14 @@ class BankImportService:
         
     def find_invoice(self, chf_id):
         try:
-            insuree = Insuree.objects.get(chf_id=chf_id, validity_to__isnull=True)
-            family = Family.objects.get(head_insuree=insuree, validity_to__isnull=True)
+            insuree = Insuree.objects.get(chf_id=chf_id, validity_to__isnull=True) 
             return Invoice.objects.filter(
-                subject_id=str(family.id),
+                subject_id=str(insuree.id),
                 is_deleted=False
             ).exclude(
                 code__endswith='-G'
             ).order_by("date_invoice").first()
-        except (Insuree.DoesNotExist, Family.DoesNotExist):
+        except Insuree.DoesNotExist:
             return None
 
     def reconcile_bank_transaction(self, tx):
