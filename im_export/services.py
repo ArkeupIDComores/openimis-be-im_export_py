@@ -280,10 +280,11 @@ class FamilyImportExportService:
                                 village = 1
                             current_village_id = Location.objects.filter(
                                 Q(code=village) | Q(name=village)).filter(
-                                    validity_to__isnull=True, type='V').first().id
+                                    validity_to__isnull=True, type='V').first()
                             if not current_village_id:
                                 current_village_id = Location.objects.filter(
-                                    validity_to__isnull=True, type='V').first().id
+                                    validity_to__isnull=True, type='V').first()
+                            current_village_id = current_village_id.id
                             current_gender = gender_dict.get(3)
                             if r.get("Sexe") is not None and int(r.get("Sexe")) in [1, 2]:
                                 current_gender = gender_dict.get(int(r.get("Sexe")))
