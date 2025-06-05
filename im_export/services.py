@@ -641,6 +641,7 @@ class BankImportService:
             insuree = Insuree.objects.get(chf_id=chf_id, validity_to__isnull=True) 
             return Invoice.objects.filter(
                 subject_id=str(insuree.id),
+                status=Invoice.Status.VALIDATED,
                 is_deleted=False
             ).exclude(
                 code__endswith='-G'
@@ -717,6 +718,7 @@ class BankImportService:
 
         if invoice.status != Invoice.Status.RECONCILIATED:
             invoice.status = Invoice.Status.RECONCILIATED
+            invoice.date_payed = payment_invoice.date_payment
             invoice.save(username=self._user.username)
         self.log_invoice_event(
             user=self._user,
