@@ -368,30 +368,39 @@ class FamilyImportExportService:
                                 current_contribution = False
                                 policy_data = {}
                                 periodicity = "M"
+                                value = 1
                                 if amount_family == 15000:
                                     contribution_plan_code = "AMOG"
+                                    value = 1
                                     periodicity = "M"
                                 if amount_family == 10000:
                                     contribution_plan_code = "AMOE"
                                     periodicity = "M"
+                                    value = 1
                                 if amount_family == 5000:
                                     contribution_plan_code = "AMOS"
                                     periodicity = "M"
+                                    value = 1
                                 if amount_family == 3500:
                                     contribution_plan_code = "AMOS1"
                                     periodicity = "Q"
+                                    value = 3
                                 if amount_family == 2500:
                                     contribution_plan_code = "AMOS2"
                                     periodicity = "Q"
+                                    value = 3
                                 if amount_family == 2000:
                                     contribution_plan_code = "AMOS3"
                                     periodicity = "Q"
+                                    value = 3
                                 if amount_family == 1500:
                                     contribution_plan_code = "AMOS4"
                                     periodicity = "Q"
+                                    value = 3
                                 if amount_family == 0:
                                     contribution_plan_code = "AMS"
                                     periodicity = "Y"
+                                    value = 12
                                 if contribution_plan_code:
                                     current_contribution = ContributionPlan.objects.filter(
                                         code=contribution_plan_code
@@ -406,7 +415,7 @@ class FamilyImportExportService:
                                         if product:
                                             product = product.first()
                                             expiry_date = today.date() + datetimedelta(
-                                                months=product.insurance_period
+                                                months=value
                                             )
                                         policy_data = {
                                             "enroll_date": today.date(),
