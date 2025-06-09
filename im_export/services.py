@@ -13,7 +13,7 @@ from policy.models import Policy
 from policy.services import PolicyService
 from core.models import Officer
 from payer.models import Payer
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 from django.contrib.contenttypes.models import ContentType
 from contribution.services import update_or_create_premium
@@ -417,6 +417,7 @@ class FamilyImportExportService:
                                             expiry_date = today.date() + datetimedelta(
                                                 months=value
                                             )
+                                            expiry_date = expiry_date - timedelta(days=1)
                                         policy_data = {
                                             "enroll_date": today.date(),
                                             "start_date": today.date(),
