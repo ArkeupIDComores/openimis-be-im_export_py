@@ -94,7 +94,9 @@ def import_exim_bank(request):
                     "amount": tx["amount"],
                     "invoice_code": result["invoice_code"],
                     "payment_id": result["payment_id"],
+                    "premium_uuid": result.get("premium_uuid"),
                     "status": result["status"],
+                    "complete": result.get("premium_uuid") is not None
                 })
             except Exception as exc:
                 # Ajoute l'erreur avec l'index ou info utile pour retrouver la ligne

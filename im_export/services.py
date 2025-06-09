@@ -647,20 +647,24 @@ class BankImportService:
         
     def find_invoice(self, chf_id):
         try:
-            insuree = Insuree.objects.get(chf_id=chf_id, validity_to__isnull=True)
-            family = Family.objects.get(head_insuree=insuree, validity_to__isnull=True)
-            return Invoice.objects.filter(subject_id=str(family.id), is_deleted=False).order_by("date_invoice").first()
-        except (Insuree.DoesNotExist, Family.DoesNotExist):
+            insuree = Insuree.objects.get(chf_id=chf_id, validity_to__isnull=True) 
+            return Invoice.objects.filter(
+                subject_id=str(insuree.id),
+                is_deleted=False
+            ).exclude(
+                code__endswith='-G'
+            ).order_by("date_invoice").first()
+        except Insuree.DoesNotExist:
             return None
 
     def reconcile_bank_transaction(self, tx):
         chf_id = tx["insuree_chf_id"]
         if not chf_id:
-            raise Exception("Insuree CHFID manquant")
+            raise Exception("Numéro d'assuré manquant")
 
         invoice = self.find_invoice(chf_id)
         if not invoice:
-            raise Exception(f"Aucune facture trouvée pour le chf_id {chf_id}")
+            raise Exception(f"Aucune facture trouvée pour le numéro d'assuré {chf_id}")
 
         if invoice.status in [Invoice.Status.PAID, Invoice.Status.CANCELLED]:
             raise Exception(f"Facture déjà payée ou annulée: {invoice.code}")
@@ -765,5 +769,5 @@ class BankImportService:
             else:
                 logger.warning(f"Aucune police active trouvée pour la famille {family.id}")
         except Exception as e:
-            logger.exception(f"Erreur lors de la création de contribution pour CHFID {chf_id}: {e}")
+            logger.exception(f"Erreur lors de la création de contribution pour le numéro d'assuré {chf_id}: {e}")
     
