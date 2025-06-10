@@ -13,7 +13,7 @@ from policy.models import Policy
 from policy.services import PolicyService
 from core.models import Officer
 from payer.models import Payer
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 from django.contrib.contenttypes.models import ContentType
 from contribution.services import update_or_create_premium
@@ -24,9 +24,13 @@ from datetime import datetime as py_datetime
 from core.datetimes.shared import datetimedelta
 from contribution_plan.models import ContributionPlan
 from django.db import transaction
+<<<<<<< HEAD
 from django.utils import timezone
 from datetime import timedelta
 from core.utils import TimeUtils
+=======
+from product.models import Product
+>>>>>>> origin/develop-comores
 
 logger = logging.getLogger(__name__)
 
@@ -241,10 +245,14 @@ class FamilyImportExportService:
                 for identification, rows in grouped.items():
                     logger.info(f"Memmbers for Identification = {identification}:")
                     if identification:
+                        policies = []
                         # Mise par Ordre de membre_de_menage ascendant en commencant par le chef de famille
                         sorted_members = sorted(rows, key=lambda x: int(x['Membresménage']) if x['Membresménage'] not in [None, ""] else -1)
                         parent_family = None
+                        sub_family = None
+                        number_count = 0
                         for r in sorted_members:
+                            number_count += 1
                             logger.info(parent_family)
                             yob = r.get("Année de naissance")
                             if yob is None or yob == "-999999999" or len(str(yob)) != 4 or yob == "":
@@ -302,24 +310,22 @@ class FamilyImportExportService:
                                 if not nin_ok or int(r.get("Pièce d'identité")) != 1:
                                     card_issued = False
                             marital = r.get("Etatmatrimonial")
-                            head = False
                             if marital is not None and marital != "":
                                 marital = int(marital)
-                                head = True if marital != 2 else False
                             else:
-                                marital = 1
+                                marital = False
                             head_insuree_data = {
                                 "last_name": r.get("Nom&prénom_membresménag") if r.get("Nom&prénom_membresménag")\
                                     is not None else " ",
                                 "other_names": " ",
                                 "gender_id": current_gender,
                                 "dob": str(yob) + "-" + str(mob) + "-" + str(dob),
-                                "head": head,
-                                "marital": marital,
                                 "current_village_id": current_village_id,
                                 "card_issued": card_issued,
                                 "audit_user_id": self._user._u.id
                             }
+                            if marital:
+                                head_insuree_data["marital"] = marital
                             if nin is not False and nin_ok:
                                 head_insuree_data["passport"] = nin
                             if r.get("Revenus") is not None and r.get("Revenus") != "":
@@ -358,40 +364,49 @@ class FamilyImportExportService:
                                 logger.info(f"family created {parent_family}")
                                 familycreated += 1
                                 amount_family = False
-                                if r.get("Cotisations_totales_ménages") is not None and r.get("Cotisations_totales_ménages") != "":
+                                if r.get("Cotisationsfamilles") is not None and r.get("Cotisationsfamilles") != "":
                                     try:
-                                        amount_family = Decimal(r.get("Cotisations_totales_ménages"))
+                                        amount_family = Decimal(r.get("Cotisationsfamilles"))
                                     except:
                                         logger.info("Could not parse the familly contribtion amount %s",
-                                            r.get("Cotisations_totales_ménages"))
+                                            r.get("Cotisationsfamilles"))
                                 contribution_plan_code = False
                                 current_contribution = False
                                 policy_data = {}
                                 periodicity = "M"
+                                value = 1
                                 if amount_family == 15000:
                                     contribution_plan_code = "AMOG"
+                                    value = 1
                                     periodicity = "M"
                                 if amount_family == 10000:
                                     contribution_plan_code = "AMOE"
                                     periodicity = "M"
+                                    value = 1
                                 if amount_family == 5000:
                                     contribution_plan_code = "AMOS"
                                     periodicity = "M"
+                                    value = 1
                                 if amount_family == 3500:
                                     contribution_plan_code = "AMOS1"
                                     periodicity = "Q"
+                                    value = 3
                                 if amount_family == 2500:
                                     contribution_plan_code = "AMOS2"
                                     periodicity = "Q"
+                                    value = 3
                                 if amount_family == 2000:
                                     contribution_plan_code = "AMOS3"
                                     periodicity = "Q"
+                                    value = 3
                                 if amount_family == 1500:
                                     contribution_plan_code = "AMOS4"
                                     periodicity = "Q"
+                                    value = 3
                                 if amount_family == 0:
                                     contribution_plan_code = "AMS"
                                     periodicity = "Y"
+                                    value = 12
                                 if contribution_plan_code:
                                     current_contribution = ContributionPlan.objects.filter(
                                         code=contribution_plan_code
@@ -401,10 +416,18 @@ class FamilyImportExportService:
                                                                         validity_to__isnull=True).first()
                                         if not officer:
                                             officer = Officer.objects.filter(validity_to__isnull=True).first()
+                                        product = Product.objects.filter(id=int(current_contribution.benefit_plan_id))
+                                        expiry_date = False
+                                        if product:
+                                            product = product.first()
+                                            expiry_date = today.date() + datetimedelta(
+                                                months=value
+                                            )
+                                            expiry_date = expiry_date - timedelta(days=1)
                                         policy_data = {
                                             "enroll_date": today.date(),
                                             "start_date": today.date(),
-                                            "status": Policy.STATUS_ACTIVE,
+                                            "status": Policy.STATUS_IDLE,
                                             "contribution_plan_id": str(current_contribution.id),
                                             "value": amount_family,
                                             "audit_user_id": self._user._u.id,
@@ -413,26 +436,17 @@ class FamilyImportExportService:
                                             "payment_day": 5,
                                             "officer_id": officer.id
                                         }
+                                        if expiry_date:
+                                            policy_data["expiry_date"] = expiry_date
                                 if marital != 2:
                                     # On cree la police pour la famille si c'est pas poligame
                                     # si c'est poligame c'est la sous famille qui aura la police
                                     if current_contribution and contribution_plan_code:
                                         policy_data["family_id"] = parent_family.id
-                                        logger.info("Creation police pour la famille %s", parent_family.id)
-                                        policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
-                                        logger.info("policy_created %s", policy_created.id)
-                                        premium_data = {
-                                            "audit_user_id": self._user._u.id,
-                                            "receipt": f"receipt_{uuid4()}",
-                                            "pay_date": today.date(),
-                                            "pay_type": "B",
-                                            "is_photo_fee": False,
-                                            "amount": amount_family,
-                                            "policy_id": policy_created.id
-                                        }
-                                        premium = Premium(**premium_data)
-                                        created_premium = update_or_create_premium(premium, self._user)
-                                        logger.info("premium created %s", created_premium)
+                                        logger.info("La police pour la famille %s sera cree plus tard", parent_family.id)
+                                        # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
+                                        # logger.info("policy_created %s", policy_created.id)
+                                        policies.append(policy_data)
                                 if marital == 2:
                                     #polygamous with should create 1 subfamily
                                     jsonextsub = {}
@@ -456,30 +470,32 @@ class FamilyImportExportService:
                                     sub_family = FamilyService(self._user).create_or_update(sub_family_data)
                                     familycreated += 1
                                     logger.info("sub family created %s", sub_family.id)
+                                    parent_family.head_insuree.family_id = sub_family.id
+                                    parent_family.head_insuree.save()
                                     if current_contribution and contribution_plan_code:
                                         policy_data["family_id"] = sub_family.id
                                         logger.info("Creation police pour la sous famille %s", sub_family.id)
-                                        policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
-                                        logger.info("sub family policy_created %s", policy_created)
-                                        premium_data = {
-                                            "audit_user_id": self._user._u.id,
-                                            "receipt": f"receipt_{uuid4()}",
-                                            "pay_date": today.date(),
-                                            "pay_type": "B",
-                                            "is_photo_fee": False,
-                                            "amount": amount_family,
-                                            "policy_id": policy_created.id
-                                        }
-                                        premium = Premium(**premium_data)
-                                        created_premium = update_or_create_premium(premium, self._user)
-                                        logger.info("subfamily premium created %s", created_premium)
+                                        policies.append(policy_data)
+                                        # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
+                                        # logger.info("sub family policy to create later")
                             else:
-                                # On ajoute l'assurée comme membre de la famille existante
-                                head_insuree_data["family_id"] = parent_family.id
-                                logger.info("creation assure simple pour la famille %s", parent_family)
+                                # On ajoute l'assurée comme membre de la famille ou sous famille existante
+                                if sub_family:
+                                    fid = sub_family.id
+                                else:
+                                    fid = parent_family.id
+                                head_insuree_data["family_id"] = fid
+                                logger.info("creation assure simple pour la famille %s", fid)
                                 insuree = InsureeService(self._user).create_or_update(head_insuree_data)
                                 logger.info("Assuree cree %s", insuree)
+                                if sub_family and number_count == 2:
+                                    sub_family.head_insuree_id = insuree.id
+                                    insuree.head = True
+                                    insuree.save()
+                                    sub_family.save()
                         logger.info("creation groupe d'itentification ok.......")
+                        for police_data in policies:
+                            PolicyService(self._user).update_or_create(police_data, self._user)
                 logger.info("Fin du traitement d'import.......")
         except Exception as e:
             return InsureeImportExportService._get_general_error('FAILED TO IMPORT FILE: ', e)
