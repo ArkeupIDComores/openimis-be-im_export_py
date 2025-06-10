@@ -23,14 +23,11 @@ from django.db.models import Q
 from datetime import datetime as py_datetime
 from core.datetimes.shared import datetimedelta
 from contribution_plan.models import ContributionPlan
-from django.db import transaction
-<<<<<<< HEAD
+from django.db import transaction 
 from django.utils import timezone
 from datetime import timedelta
-from core.utils import TimeUtils
-=======
-from product.models import Product
->>>>>>> origin/develop-comores
+from core.utils import TimeUtils 
+from product.models import Product 
 
 logger = logging.getLogger(__name__)
 
