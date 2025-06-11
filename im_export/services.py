@@ -313,7 +313,7 @@ class FamilyImportExportService:
                                 marital = False
                             head_insuree_data = {
                                 "last_name": r.get("Nom&prénom_membresménag") if r.get("Nom&prénom_membresménag")\
-                                    is not None else " ",
+                                    not in [None, ""] else " ",
                                 "other_names": " ",
                                 "gender_id": current_gender,
                                 "dob": str(yob) + "-" + str(mob) + "-" + str(dob),
