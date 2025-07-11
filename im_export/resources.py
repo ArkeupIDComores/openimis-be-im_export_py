@@ -2,7 +2,7 @@ from django.db.models import Q
 
 from core.datetimes.ad_datetime import datetime
 from im_export.apps import ImportExportConfig
-from insuree.models import Insuree, Family, Gender
+from insuree.models import Insuree, Family, Gender, Maladieinvalidante_Non, Handicap_Non, CouvertureAssuranceMutuelle, Milieuderesidence, TypesHabitation
 from location.models import Location
 
 from import_export import fields, resources, widgets
@@ -132,7 +132,38 @@ def validate_and_preprocess(dataset):
 
 class InsureeResource(resources.ModelResource):
     insuree_headers = ['head_insuree_number', 'insuree_number', 'last_name', 'other_names', 'dob', 'sex', 'village',
-                       'municipality', 'district', 'region']
+                       'municipality', 'district', 'region', 'types_habitation', 'maladie_invalidante_non', 'handicap_non',
+                       'couverture_assurance_mutuelle', 'milieu_de_residence']
+
+    types_habitation = fields.Field(
+        column_name='types_habitation',
+        attribute='types_habitation',
+        widget=ForeignkeyRequiredWidget(TypesHabitation, 'code')  # ou 'label' selon ce que tu veux
+    )
+
+    maladie_invalidante_non = fields.Field(
+        column_name='maladie_invalidante_non',
+        attribute='maladie_invalidante_non',
+        widget=ForeignkeyRequiredWidget(Maladieinvalidante_Non, 'code')  # adapte au champ réel
+    )
+
+    handicap_non = fields.Field(
+        column_name='handicap_non',
+        attribute='handicap_non',
+        widget=ForeignkeyRequiredWidget(Handicap_Non, 'code')  # ou autre champ pertinent
+    )
+
+    couverture_assurance_mutuelle = fields.Field(
+        column_name='couverture_assurance_mutuelle',
+        attribute='couverture_assurance_mutuelle',
+        widget=ForeignkeyRequiredWidget(CouvertureAssuranceMutuelle, 'code')
+    )
+
+    milieu_de_residence = fields.Field(
+        column_name='milieu_de_residence',
+        attribute='milieu_de_residence',
+        widget=ForeignkeyRequiredWidget(Milieuderesidence, 'code')
+    )    
 
     head_insuree_number = fields.Field(
         attribute='family',

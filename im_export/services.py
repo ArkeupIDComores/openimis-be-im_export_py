@@ -30,7 +30,6 @@ from core.utils import TimeUtils
 from product.models import Product
 import os
 from pathlib import Path
-import copy
 
 logger = logging.getLogger(__name__)
 
@@ -184,8 +183,8 @@ class FamilyImportExportService:
         family_headers = ['Identification', 'Etatmatrimonial', 'Membresménage',
        'Nom&prénom_membresménag', 'Sexe', 'Lien de parenté', "Pièce d'identité",
        'NIN', 'Jour de naissance', 'Mois de naissance', 'Année de naissance', 'Âge',
-       'Formation ou non', 'Types de formation', 'Maladie invalidante Non',
-       'Handicap Non', 'Couverture_Assurance_Mutuelle',
+       'Formation ou non', 'Types de formation', 'Maladieinvalidante_Non',
+       'Handicap_Non', 'CouvertureAssuranceMutuelle',
        'Catégories_professionnelles', 'Tailleménages', 'Scores_taille_des_ménages',
        'Revenus', 'Scores_revenus', 'Scores_types_habitation',
        'Scores_totaux_catégorisation', 'Cotisationsfamilles', 'Cotisations_famille_chef_famille',
@@ -331,14 +330,7 @@ class FamilyImportExportService:
                                     card_issued = False
                             marital = r.get("Etatmatrimonial")
                             if marital is not None and marital != "":
-                                my_dict = {
-                                    "1": "M",
-                                    "3": "D",
-                                    "4": "W",
-                                    "5": "S",
-                                    "2": "P"
-                                }
-                                marital = my_dict.get(str(marital))
+                                marital = int(marital)
                             else:
                                 marital = False
                             head_insuree_data = {
@@ -371,19 +363,18 @@ class FamilyImportExportService:
                             jsonext.update({
                                 "data": {
                                     "head_insuree": head_insuree_data,
-                                    "family_level": "2" if marital == "P" else "1",
+                                    "family_level": "2" if marital == 2 else "1",
                                     "location_id": current_village_id,
-                                    "family_type_id": "P" if marital == "P" else "H",
+                                    "family_type_id": "P" if marital == 2 else "H",
                                 }
                             })
                             family_data = {
                                 "head_insuree": head_insuree_data,
-                                "family_level": "2" if marital == "P" else "1",
+                                "family_level": "2" if marital == 2 else "1",
                                 "location_id": current_village_id,
-                                "family_type_id": "P" if marital == "P" else "H",
+                                "family_type_id": "P" if marital == 2 else "H",
                                 "json_ext": str(jsonext)
                             }
-                            head_insuree_data["json_ext"] = str(copy.copy(head_insuree_data))
                             logger.info(f"family_data {family_data}" )
                             if not parent_family:
                                 # Pas de famille donc on cree direct vu que les membre menages sont en ordre
@@ -466,7 +457,7 @@ class FamilyImportExportService:
                                         }
                                         if expiry_date:
                                             policy_data["expiry_date"] = expiry_date
-                                if marital != "P":
+                                if marital != 2:
                                     # On cree la police pour la famille si c'est pas poligame
                                     # si c'est poligame c'est la sous famille qui aura la police
                                     if current_contribution and contribution_plan_code:
@@ -475,7 +466,7 @@ class FamilyImportExportService:
                                         # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
                                         # logger.info("policy_created %s", policy_created.id)
                                         policies.append(policy_data)
-                                if marital == "P":
+                                if marital == 2:
                                     #polygamous with should create 1 subfamily
                                     jsonextsub = {}
                                     jsonextsub.update({
@@ -513,7 +504,29 @@ class FamilyImportExportService:
                                 else:
                                     fid = parent_family.id
                                 head_insuree_data["family_id"] = fid
-                                head_insuree_data["json_ext"] = str(copy.copy(head_insuree_data))
+
+                                #Ajout des colonnes boolean
+                                # Champs booléens codés dans des tables de référence
+                                try:
+                                    maladie_code = r.get("Maladie invalidante_Non")
+                                    if maladie_code is not None and str(maladie_code).isdigit():
+                                        head_insuree_data["maladie_invalidante_non_id"] = int(maladie_code)
+
+                                    handicap_code = r.get("Handicap_Non")
+                                    if handicap_code is not None and str(handicap_code).isdigit():
+                                        head_insuree_data["handicap_non_id"] = int(handicap_code)
+
+                                    couverture_code = r.get("Couverture_Assurance_Mutuelle")
+                                    if couverture_code is not None and str(couverture_code).isdigit():
+                                        head_insuree_data["couverture_assurance_mutuelle_id"] = int(couverture_code)
+
+                                    milieu_code = r.get("milieu de résidence")
+                                    if milieu_code is not None and str(milieu_code).isdigit():
+                                        head_insuree_data["milieu_de_residence_id"] = int(milieu_code)
+                                except Exception as e:
+                                    logger.warning(f"Erreur lors de l'import des codes FK booléens : {e}")
+
+
                                 logger.info("creation assure simple pour la famille %s", fid)
                                 insuree = InsureeService(self._user).create_or_update(head_insuree_data)
                                 logger.info("Assuree cree %s", insuree)
