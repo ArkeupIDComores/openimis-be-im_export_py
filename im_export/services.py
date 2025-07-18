@@ -6,7 +6,7 @@ from im_export.resources import InsureeResource
 import openpyxl
 from decimal import Decimal
 from invoice.models import Invoice, PaymentInvoice, DetailPaymentInvoice, InvoiceEvent
-from insuree.models import Insuree, Family
+from insuree.models import Insuree, Family, Maladieinvalidante_Non, Handicap_Non, CouvertureAssuranceMutuelle, Milieuderesidence, TypesHabitation
 from insuree.services import FamilyService, InsureeService
 from contribution.models import Premium
 from policy.models import Policy
@@ -514,6 +514,26 @@ class FamilyImportExportService:
                                     fid = parent_family.id
                                 head_insuree_data["family_id"] = fid
                                 head_insuree_data["json_ext"] = str(copy.copy(head_insuree_data))
+
+                                try:
+                                    non_disabling_code = r.get("Maladie invalidante Non")
+                                    if non_disabling_code is not None and str(non_disabling_code).isdigit():
+                                        head_insuree_data["non_disabling_disease"] = int(non_disabling_code)
+
+                                    no_disability_code = r.get("Handicap Non")
+                                    if no_disability_code is not None and str(no_disability_code).isdigit():
+                                        head_insuree_data["no_disability"] = int(no_disability_code)
+
+                                    coverage_code = r.get("Couverture_Assurance_Mutuelle")
+                                    if coverage_code is not None and str(coverage_code).isdigit():
+                                        head_insuree_data["mutual_insurance_coverage"] = int(coverage_code)
+
+                                    environment_code = r.get("milieu de résidence")
+                                    if environment_code is not None and str(environment_code).isdigit():
+                                        head_insuree_data["residence_environment"] = int(environment_code)
+                                except Exception as e:
+                                    logger.warning(f"Erreur lors de l'import des codes FK booléens : {e}")
+
                                 logger.info("creation assure simple pour la famille %s", fid)
                                 insuree = InsureeService(self._user).create_or_update(head_insuree_data)
                                 logger.info("Assuree cree %s", insuree)
