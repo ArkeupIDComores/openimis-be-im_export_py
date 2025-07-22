@@ -6,7 +6,7 @@ from im_export.resources import InsureeResource
 import openpyxl
 from decimal import Decimal
 from invoice.models import Invoice, PaymentInvoice, DetailPaymentInvoice, InvoiceEvent
-from insuree.models import Insuree, Family, Maladieinvalidante_Non, Handicap_Non, CouvertureAssuranceMutuelle, Milieuderesidence, TypesHabitation
+from insuree.models import Insuree, Family, residenceEnvironment, housingType, mutualInsuranceCoverage, noDisability, nonDisablingDisease
 from insuree.services import FamilyService, InsureeService
 from contribution.models import Premium
 from policy.models import Policy
