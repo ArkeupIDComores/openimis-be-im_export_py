@@ -6,7 +6,7 @@ from im_export.resources import InsureeResource
 import openpyxl
 from decimal import Decimal
 from invoice.models import Invoice, PaymentInvoice, DetailPaymentInvoice, InvoiceEvent
-from insuree.models import Insuree, Family, residenceEnvironment, housingType, mutualInsuranceCoverage, noDisability, nonDisablingDisease
+from insuree.models import Insuree, Family, ResidenceEnvironment, HousingType, MutualInsuranceCoverage, NoDisability, NonDisablingDisease
 from insuree.services import FamilyService, InsureeService
 from contribution.models import Premium
 from policy.models import Policy
@@ -184,18 +184,18 @@ class FamilyImportExportService:
         family_headers = ['Identification', 'Etatmatrimonial', 'Membresménage',
        'Nom&prénom_membresménag', 'Sexe', 'Lien de parenté', "Pièce d'identité",
        'NIN', 'Jour de naissance', 'Mois de naissance', 'Année de naissance', 'Âge',
-       'Formation ou non', 'Types de formation', 'Maladie invalidante Non',
-       'Handicap Non', 'Couverture_Assurance_Mutuelle',
+       'Formation ou non', 'Types de formation', 'MaladieInvalidante_Non',
+       'Handicap_Non', 'CouvertureAssuranceMutuelle',
        'Catégories_professionnelles', 'Tailleménages', 'Scores_taille_des_ménages',
        'Revenus', 'Scores_revenus', 'Scores_types_habitation',
        'Scores_totaux_catégorisation', 'Cotisationsfamilles', 'Cotisations_famille_chef_famille',
-       'île', 'milieu de résidence', 'District_sanitaire', 'Commune', 'Localité',
+       'île', 'MilieuDeResidence', 'District_sanitaire', 'Commune', 'Localité',
        'Taillefamille', 'Autresménage', 'Féminin', 'Masculin',
        'Cotisationsautresménages', 'Cotisations_totales_ménages',
        'PartsGouv_&_PTFCotisations Familles',
        'PartsGouv_&_PTFCotisations_Autresménages_démunis',
        'Parts Gouv & PTFCotisations_Autresménages_Vulnérables',
-       'Partstotaux_Gvt&PTF']
+       'Partstotaux_Gvt&PTF', 'TypesHabitation']
         # Education, Relations, Profession, changer les chiffres de income levels
         try:
             if import_file.content_type == 'application/vnd.ms-excel':
@@ -351,6 +351,30 @@ class FamilyImportExportService:
                                 "card_issued": card_issued,
                                 "audit_user_id": self._user._u.id
                             }
+
+                            try:
+                                non_disabling_code = r.get("MaladieInvalidante_Non")
+                                if non_disabling_code is not None and str(non_disabling_code).isdigit():
+                                    head_insuree_data["non_disabling_disease_id"] = int(non_disabling_code)
+
+                                no_disability_code = r.get("Handicap_Non")
+                                if no_disability_code is not None and str(no_disability_code).isdigit():
+                                    head_insuree_data["no_disability_id"] = int(no_disability_code)
+
+                                coverage_code = r.get("CouvertureAssuranceMutuelle")
+                                if coverage_code is not None and str(coverage_code).isdigit():
+                                    head_insuree_data["mutual_insurance_coverage_id"] = int(coverage_code)
+
+                                environment_code = r.get("MilieuDeResidence")
+                                if environment_code is not None and str(environment_code).isdigit():
+                                    head_insuree_data["residence_environment_id"] = int(environment_code)
+
+                                housing_type_code = r.get("TypesHabitation")
+                                if housing_type_code is not None and str(housing_type_code).isdigit():
+                                    head_insuree_data["housing_type_id"] = housing_type_code
+                            except Exception as e:
+                                print(f"Erreur lors de l'import des codes FK booléens : {e}")
+
                             if marital:
                                 head_insuree_data["marital"] = marital
                             if nin is not False and nin_ok:
@@ -515,36 +539,15 @@ class FamilyImportExportService:
                                 head_insuree_data["family_id"] = fid
                                 head_insuree_data["json_ext"] = str(copy.copy(head_insuree_data))
 
-                                try:
-                                    non_disabling_code = r.get("Maladie invalidante Non")
-                                    if non_disabling_code is not None and str(non_disabling_code).isdigit():
-                                        head_insuree_data["non_disabling_disease"] = int(non_disabling_code)
-
-                                    no_disability_code = r.get("Handicap Non")
-                                    if no_disability_code is not None and str(no_disability_code).isdigit():
-                                        head_insuree_data["no_disability"] = int(no_disability_code)
-
-                                    coverage_code = r.get("Couverture_Assurance_Mutuelle")
-                                    if coverage_code is not None and str(coverage_code).isdigit():
-                                        head_insuree_data["mutual_insurance_coverage"] = int(coverage_code)
-
-                                    environment_code = r.get("milieu de résidence")
-                                    if environment_code is not None and str(environment_code).isdigit():
-                                        head_insuree_data["residence_environment"] = int(environment_code)
-                                except Exception as e:
-                                    logger.warning(f"Erreur lors de l'import des codes FK booléens : {e}")
-
-                                logger.info("creation assure simple pour la famille %s", fid)
-                                insuree = InsureeService(self._user).create_or_update(head_insuree_data)
-                                logger.info("Assuree cree %s", insuree)
-                                if sub_family and number_count == 2:
-                                    sub_family.head_insuree_id = insuree.id
-                                    insuree.head = True
-                                    insuree.save()
-                                    sub_family.save()
-                        logger.info("creation groupe d'itentification ok.......")
-                        for police_data in policies:
-                            PolicyService(self._user).update_or_create(police_data, self._user)
+                            insuree = InsureeService(self._user).create_or_update(head_insuree_data)
+                            if sub_family and number_count == 2:
+                                sub_family.head_insuree_id = insuree.id
+                                insuree.head = True
+                                insuree.save()
+                                sub_family.save()
+                            logger.info("creation groupe d'itentification ok.......")
+                            for police_data in policies:
+                                PolicyService(self._user).update_or_create(police_data, self._user)
                 logger.info("Fin du traitement d'import.......")
         except Exception as e:
             return InsureeImportExportService._get_general_error('FAILED TO IMPORT FILE: ', e)
