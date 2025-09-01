@@ -352,28 +352,25 @@ class FamilyImportExportService:
                                 "audit_user_id": self._user._u.id
                             }
 
-                            try:
-                                non_disabling_code = r.get("MaladieInvalidante_Non")
-                                if non_disabling_code is not None and str(non_disabling_code).isdigit():
-                                    head_insuree_data["non_disabling_disease_id"] = int(non_disabling_code)
+                            non_disabling_code = r.get("MaladieInvalidante_Non")
+                            if non_disabling_code is not None and str(non_disabling_code).isdigit():
+                                head_insuree_data["non_disabling_disease_id"] = int(non_disabling_code)
 
-                                no_disability_code = r.get("Handicap_Non")
-                                if no_disability_code is not None and str(no_disability_code).isdigit():
-                                    head_insuree_data["no_disability_id"] = int(no_disability_code)
+                            no_disability_code = r.get("Handicap_Non")
+                            if no_disability_code is not None and str(no_disability_code).isdigit():
+                                head_insuree_data["no_disability_id"] = int(no_disability_code)
 
-                                coverage_code = r.get("CouvertureAssuranceMutuelle")
-                                if coverage_code is not None and str(coverage_code).isdigit():
-                                    head_insuree_data["mutual_insurance_coverage_id"] = int(coverage_code)
+                            coverage_code = r.get("CouvertureAssuranceMutuelle")
+                            if coverage_code is not None and str(coverage_code).isdigit():
+                                head_insuree_data["mutual_insurance_coverage_id"] = int(coverage_code)
 
-                                environment_code = r.get("MilieuDeResidence")
-                                if environment_code is not None and str(environment_code).isdigit():
-                                    head_insuree_data["residence_environment_id"] = int(environment_code)
+                            environment_code = r.get("MilieuDeResidence")
+                            if environment_code is not None and str(environment_code).isdigit():
+                                head_insuree_data["residence_environment_id"] = int(environment_code)
 
-                                housing_type_code = r.get("TypesHabitation")
-                                if housing_type_code is not None and str(housing_type_code).isdigit():
-                                    head_insuree_data["housing_type_id"] = housing_type_code
-                            except Exception as e:
-                                print(f"Erreur lors de l'import des codes FK booléens : {e}")
+                            housing_type_code = r.get("TypesHabitation")
+                            if housing_type_code is not None and str(housing_type_code).isdigit():
+                                head_insuree_data["housing_type_id"] = housing_type_code
 
                             if marital:
                                 head_insuree_data["marital"] = marital
