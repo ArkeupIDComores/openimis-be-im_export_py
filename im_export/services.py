@@ -184,18 +184,18 @@ class FamilyImportExportService:
         family_headers = ['Identification', 'Etatmatrimonial', 'Membresménage',
        'Nom&prénom_membresménag', 'Sexe', 'Lien de parenté', "Pièce d'identité",
        'NIN', 'Jour de naissance', 'Mois de naissance', 'Année de naissance', 'Âge',
-       'Formation ou non', 'Types de formation', 'MaladieInvalidante_Non',
-       'Handicap_Non', 'CouvertureAssuranceMutuelle',
+       'Formation ou non', 'Types de formation', 'Maladie invalidante Non',
+       'Handicap Non', 'Couverture_Assurance_Mutuelle',
        'Catégories_professionnelles', 'Tailleménages', 'Scores_taille_des_ménages',
        'Revenus', 'Scores_revenus', 'Scores_types_habitation',
        'Scores_totaux_catégorisation', 'Cotisationsfamilles', 'Cotisations_famille_chef_famille',
-       'île', 'MilieuDeResidence', 'District_sanitaire', 'Commune', 'Localité',
+       'île', 'milieu de résidence', 'District_sanitaire', 'Commune', 'Localité',
        'Taillefamille', 'Autresménage', 'Féminin', 'Masculin',
        'Cotisationsautresménages', 'Cotisations_totales_ménages',
        'PartsGouv_&_PTFCotisations Familles',
        'PartsGouv_&_PTFCotisations_Autresménages_démunis',
        'Parts Gouv & PTFCotisations_Autresménages_Vulnérables',
-       'Partstotaux_Gvt&PTF', 'TypesHabitation']
+       'Partstotaux_Gvt&PTF']
         # Education, Relations, Profession, changer les chiffres de income levels
         try:
             if import_file.content_type == 'application/vnd.ms-excel':
@@ -352,23 +352,23 @@ class FamilyImportExportService:
                                 "audit_user_id": self._user._u.id
                             }
 
-                            non_disabling_code = r.get("MaladieInvalidante_Non")
+                            non_disabling_code = r.get("Maladie invalidante Non")
                             if non_disabling_code is not None and str(non_disabling_code).isdigit():
                                 head_insuree_data["non_disabling_disease_id"] = int(non_disabling_code)
 
-                            no_disability_code = r.get("Handicap_Non")
+                            no_disability_code = r.get("Handicap Non")
                             if no_disability_code is not None and str(no_disability_code).isdigit():
                                 head_insuree_data["no_disability_id"] = int(no_disability_code)
 
-                            coverage_code = r.get("CouvertureAssuranceMutuelle")
+                            coverage_code = r.get("Couverture_Assurance_Mutuelle")
                             if coverage_code is not None and str(coverage_code).isdigit():
                                 head_insuree_data["mutual_insurance_coverage_id"] = int(coverage_code)
 
-                            environment_code = r.get("MilieuDeResidence")
+                            environment_code = r.get("milieu de résidence")
                             if environment_code is not None and str(environment_code).isdigit():
                                 head_insuree_data["residence_environment_id"] = int(environment_code)
 
-                            housing_type_code = r.get("TypesHabitation")
+                            housing_type_code = r.get("Scores_types_habitation")
                             if housing_type_code is not None and str(housing_type_code).isdigit():
                                 head_insuree_data["housing_type_id"] = housing_type_code
 
