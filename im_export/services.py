@@ -208,11 +208,28 @@ class FamilyImportExportService:
                 data_set = Dataset(headers=family_headers).load(import_file.read().decode())
         except Exception as e:
             return InsureeImportExportService._get_general_error('Failed to parse input file', e)
+
+        non_disabling_dict = {
+            1:1,
+            0:2
+        }
+
+        no_disability_dict = {
+            1:1,
+            0:2
+        }
+
+        mutual_insurance_coverange_dict={
+            1:2,
+            0:1
+        }
+
         gender_dict = {
             1: "M",
             2: "F",
             3: "O"
         }
+        
         professional_situations = {
             0: "Sans profession",
             1: "Agriculteur exploitant/Pêcheur/Éleveur/ou Artisan",
@@ -354,15 +371,15 @@ class FamilyImportExportService:
 
                             non_disabling_code = r.get("Maladie invalidante Non")
                             if non_disabling_code is not None and str(non_disabling_code).isdigit():
-                                head_insuree_data["non_disabling_disease_id"] = int(non_disabling_code)
+                                head_insuree_data["non_disabling_disease_id"] = non_disabling_dict.get(int(non_disabling_code))
 
                             no_disability_code = r.get("Handicap Non")
                             if no_disability_code is not None and str(no_disability_code).isdigit():
-                                head_insuree_data["no_disability_id"] = int(no_disability_code)
+                                head_insuree_data["no_disability_id"] = no_disability_dict.get(int(no_disability_code))
 
                             coverage_code = r.get("Couverture_Assurance_Mutuelle")
                             if coverage_code is not None and str(coverage_code).isdigit():
-                                head_insuree_data["mutual_insurance_coverage_id"] = int(coverage_code)
+                                head_insuree_data["mutual_insurance_coverage_id"] = mutual_insurance_coverange_dict.get(int(coverage_code))
 
                             environment_code = r.get("milieu de résidence")
                             if environment_code is not None and str(environment_code).isdigit():
