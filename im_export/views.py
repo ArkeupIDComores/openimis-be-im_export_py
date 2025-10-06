@@ -5,7 +5,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from insuree.apps import InsureeConfig
-from .services import InsureeImportExportService
+from .services import InsureeImportExportService, BankImportService, FamilyImportExportService
+from rest_framework import status
+from .serializers import BankImportUploadSerializer
+from .models import BankImport 
+from core.models import InteractiveUser
+from invoice.models import InvoiceEvent
 from core.views import check_user_rights
 
 logger = logging.getLogger(__name__)
@@ -22,8 +27,11 @@ def import_insurees(request):
         dry_run = json.loads(request.POST.get('dry_run', 'false'))
         strategy = request.POST.get('strategy', InsureeImportExportService.Strategy.INSERT)
 
-        success, totals, errors = InsureeImportExportService(user) \
-            .import_insurees(import_file, dry_run=dry_run, strategy=strategy)
+        # success, totals, errors = InsureeImportExportService(user) \
+        #     .import_insurees(import_file, dry_run=dry_run, strategy=strategy)
+        # return JsonResponse(data={'success': success, 'data': totals, 'errors': errors})
+        success, totals, errors = FamilyImportExportService(user) \
+            .import_families(import_file, dry_run=dry_run, strategy=strategy)
         return JsonResponse(data={'success': success, 'data': totals, 'errors': errors})
     except ValueError as e:
         logger.error("Error while importing insurees", exc_info=e)
@@ -51,3 +59,142 @@ def export_insurees(request):
     except Exception as e:
         logger.error("Unexpected error while exporting insurees", exc_info=e)
         return Response({'success': False, 'error': str(e)}, status=500)
+
+
+@api_view(["POST"])
+def import_exim_bank(request):
+    serializer = BankImportUploadSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    file = serializer.validated_data.get("file")
+    user = InteractiveUser.objects.filter(login_name=request.user.username).first()
+    service = BankImportService(user)
+    errors = []
+    successful_transactions = []
+    transactions_result = {}
+
+    try:
+        logger.info(f"Upload fichier banque (user={user.id}, file={file})")
+
+        bank_import = BankImport.objects.create(user=user, stored_file=file)
+
+        transactions_result = service.parse_excel_exim(bank_import.stored_file)
+            
+        for idx, tx in enumerate(transactions_result["transactions"], start=1):
+            try:
+                result = service.reconcile_bank_transaction(tx)
+                successful_transactions.append({
+                    "ligne": idx,
+                    "insuree_chf_id": tx["insuree_chf_id"],
+                    "amount": tx["amount"],
+                    "invoice_code": result["invoice_code"],
+                    "payment_id": result["payment_id"],
+                    "premium_uuid": result.get("premium_uuid"),
+                    "status": result["status"],
+                    "complete": result.get("premium_uuid") is not None
+                })
+            except Exception as exc:
+                # Ajoute l'erreur avec l'index ou info utile pour retrouver la ligne
+                errors.append(f"Ligne {idx}: {str(exc)}")
+                logger.warning(f"Erreur sur la ligne {idx}: {exc}")
+                # Si on trouve une facture liée, on logue l'erreur en event
+                chfid = tx.get("insuree_chf_id", "").strip()
+                msg = (
+                    f"Erreur lors du traitement de la transaction ligne {idx} : {type(exc).__name__} - {str(exc)}. "
+                    f"CHFID='{chfid}', Montant='{tx.get('amount_received', 'N/A')}', "
+                    f"Date paiement='{tx.get('date_payment', 'N/A')}', Référence='{tx.get('code_ext', 'N/A')}'."
+                )
+                try:
+                    invoice = service.find_invoice(chfid)
+                    if invoice:
+                        service.log_invoice_event(
+                            user=user,
+                            invoice=invoice,
+                            event_type=InvoiceEvent.EventType.PAYMENT_ERROR,
+                            message=msg
+                        )
+                except Exception as e:
+                    logger.warning(f"Erreur lors du logging d'événement pour CHFID {chfid}: {e}")
+
+        logger.info(f"{transactions_result['count']} transactions créditées extraites")
+
+    except Exception as exc:
+        logger.exception("Erreur durant l'import EXIM")
+        errors.append(str(exc))
+
+    return Response({
+        "success": len(errors) == 0,
+        "errors": errors,
+        "processed": successful_transactions,
+        **transactions_result
+    }, status=status.HTTP_200_OK if not errors else status.HTTP_400_BAD_REQUEST)
+
+@api_view(["POST"])
+def import_bdc_bank(request):
+    serializer = BankImportUploadSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    file = serializer.validated_data.get("file")
+    user = InteractiveUser.objects.filter(login_name=request.user.username).first()
+    service = BankImportService(user)
+    errors = []
+    successful_transactions = []
+    transactions_result = {}
+
+    try:
+        logger.info(f"Upload fichier banque BDC (user={user.id}, file={file})")
+
+        bank_import = BankImport.objects.create(user=user, stored_file=file)
+
+        transactions_result = service.parse_excel_bdc(bank_import.stored_file)
+        
+        for idx, tx in enumerate(transactions_result["transactions"], start=1):
+            try:
+                result = service.reconcile_bank_transaction(tx)
+                successful_transactions.append({
+                    "ligne": idx,
+                    "insuree_chf_id": tx["insuree_chf_id"],
+                    "amount": tx["amount"],
+                    "invoice_code": result["invoice_code"],
+                    "payment_id": result["payment_id"],
+                    "premium_uuid": result.get("premium_uuid"),
+                    "status": result["status"],
+                    "complete": result.get("premium_uuid") is not None
+                })
+            except Exception as exc:
+                chfid = tx.get("insuree_chf_id", "").strip()
+                
+                msg = (
+                    f"Erreur lors du traitement de la transaction ligne {idx} : {type(exc).__name__} - {str(exc)}. "
+                    f"CHFID='{chfid}', Montant='{tx.get('amount_received', 'N/A')}', "
+                    f"Date paiement='{tx.get('date_payment', 'N/A')}', Référence='{tx.get('code_ext', 'N/A')}'."
+                ) 
+                errors.append(msg)
+                logger.warning(msg)
+                
+                try:
+                    invoice = service.find_invoice(chfid)
+                    if invoice:
+                        service.log_invoice_event(
+                            user=user,
+                            invoice=invoice,
+                            event_type=InvoiceEvent.EventType.PAYMENT_ERROR,
+                            message=msg
+                        )
+                except Exception as e:
+                    logger.warning(f"Erreur lors du logging d'événement pour CHFID {chfid}: {e}")
+
+
+        logger.info(f"{transactions_result['count']} transactions créditées extraites")
+
+    except Exception as exc:
+        logger.exception("Erreur durant l'import BDC")
+        errors.append(str(exc))
+
+    return Response({
+        "success": len(errors) == 0,
+        "errors": errors,
+        "processed": successful_transactions,
+        **transactions_result
+    }, status=status.HTTP_200_OK if not errors else status.HTTP_400_BAD_REQUEST)
+
