@@ -288,9 +288,9 @@ class FamilyImportExportService:
                         parent_family = None
                         sub_family = None
                         number_count = 0
+                        sub_family_count = 0
                         for r in sorted_members:
                             number_count += 1
-                            sub_family_count = 0
                             logger.info(parent_family)
                             yob = r.get("Année de naissance")
                             if yob is None or yob == "-999999999" or len(str(yob)) != 4 or yob == "":
@@ -566,6 +566,7 @@ class FamilyImportExportService:
                                 insuree.save()
                                 sub_family.save()
                             logger.info("creation groupe d'itentification ok.......")
+                            logger.info("policies %s", policies)
                             for police_data in policies:
                                 PolicyService(self._user).update_or_create(police_data, self._user)
                 logger.info("Fin du traitement d'import.......")
