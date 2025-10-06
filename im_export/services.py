@@ -544,7 +544,7 @@ class FamilyImportExportService:
                                     if current_contribution and contribution_plan_code:
                                         policy_data["family_id"] = sub_family.id
                                         if Policy.objects.filter(
-                                            family=sub_family, validity_to__isnull=True
+                                            family=parent_family, validity_to__isnull=True
                                         ).count() == 0:
                                             logger.info("La police pour la sous famille %s sera cree plus tard", sub_family.id)
                                             policies.append(policy_data)
