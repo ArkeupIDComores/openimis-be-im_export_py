@@ -282,13 +282,12 @@ class FamilyImportExportService:
                 for identification, rows in grouped.items():
                     logger.info(f"Memmbers for Identification = {identification}:")
                     if identification:
+                        policies = []
                         # Mise par Ordre de membre_de_menage ascendant en commencant par le chef de famille
                         sorted_members = sorted(rows, key=lambda x: int(x['Membresménage']) if x['Membresménage'] not in [None, ""] else -1)
                         parent_family = None
                         sub_family = None
                         number_count = 0
-                        sub_family_count = 0
-                        policies = []
                         for r in sorted_members:
                             number_count += 1
                             logger.info(parent_family)
@@ -510,13 +509,10 @@ class FamilyImportExportService:
                                     # si c'est poligame c'est la sous famille qui aura la police
                                     if current_contribution and contribution_plan_code:
                                         policy_data["family_id"] = parent_family.id
-                                        if Policy.objects.filter(
-                                            family=parent_family, validity_to__isnull=True
-                                        ).count() == 0:
-                                            logger.info("La police pour la famille %s sera cree plus tard", parent_family.id)
-                                            # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
-                                            # logger.info("policy_created %s", policy_created.id)
-                                            policies.append(policy_data)
+                                        logger.info("La police pour la famille %s sera cree plus tard", parent_family.id)
+                                        # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
+                                        # logger.info("policy_created %s", policy_created.id)
+                                        policies.append(policy_data)
                                 if marital == "P":
                                     #polygamous with should create 1 subfamily
                                     jsonextsub = {}
@@ -544,12 +540,10 @@ class FamilyImportExportService:
                                     parent_family.head_insuree.save()
                                     if current_contribution and contribution_plan_code:
                                         policy_data["family_id"] = sub_family.id
-                                        if sub_family_count == 0:
-                                            logger.info("La police pour la sous famille %s sera cree plus tard", sub_family.id)
-                                            policies.append(policy_data)
-                                            sub_family_count += 1
-                                            # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
-                                            # logger.info("sub family policy to create later")
+                                        logger.info("Creation police pour la sous famille %s", sub_family.id)
+                                        policies.append(policy_data)
+                                        # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
+                                        # logger.info("sub family policy to create later")
                             else:
                                 # On ajoute l'assurée comme membre de la famille ou sous famille existante
                                 if sub_family:
@@ -558,15 +552,15 @@ class FamilyImportExportService:
                                     fid = parent_family.id
                                 head_insuree_data["family_id"] = fid
                                 head_insuree_data["json_ext"] = str(copy.copy(head_insuree_data))
-
-                            insuree = InsureeService(self._user).create_or_update(head_insuree_data)
-                            if sub_family and number_count == 2:
-                                sub_family.head_insuree_id = insuree.id
-                                insuree.head = True
-                                insuree.save()
-                                sub_family.save()
-                            logger.info("creation groupe d'itentification ok.......")
-                            logger.info("policies %s", policies)
+                                logger.info("creation assure simple pour la famille %s", fid)
+                                insuree = InsureeService(self._user).create_or_update(head_insuree_data)
+                                logger.info("Assuree cree %s", insuree)
+                                if sub_family and number_count == 2:
+                                    sub_family.head_insuree_id = insuree.id
+                                    insuree.head = True
+                                    insuree.save()
+                                    sub_family.save()
+                        logger.info("creation groupe d'itentification ok.......")
                         for police_data in policies:
                             PolicyService(self._user).update_or_create(police_data, self._user)
                 logger.info("Fin du traitement d'import.......")
