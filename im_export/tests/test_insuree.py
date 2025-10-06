@@ -4,7 +4,8 @@ from im_export.resources import InsureeResource
 from core.services import create_or_update_core_user, create_or_update_interactive_user
 from django.test import TestCase
 from location.test_helpers import create_test_location
-
+from django.conf import settings
+from location.models import Location
 _TEST_USER_NAME = "test_insuree_import"
 _TEST_USER_PWD = "test_insuree_import"
 _TEST_DATA_USER = {
@@ -55,8 +56,30 @@ class ImportInsureeTest(TestCase):
                 create_test_location('V', custom_props={"name": villages, "parent_id": test_municipality.id})
 
     def test_simple_import(self):
+        region = Location.objects.all() \
+            .filter(validity_to__isnull=True) \
+            .filter(name='Batha Region', type='R').first()
+        if not region:  
+            region = create_test_location('R', custom_props={'name': 'Batha Region', 'code': 'R99'})
+        district = Location.objects.all() \
+            .filter(validity_to__isnull=True) \
+            .filter(name='Batha', type='D', parent=region).first()
+        if not district:
+            district = create_test_location('D', custom_props={'name': 'Batha', 'code': 'R99D1', 'parent': region})
+        ward = Location.objects.all() \
+            .filter(validity_to__isnull=True) \
+            .filter(name='Batha', type='M', parent=district).first()
+        if not ward:
+            ward = create_test_location('M', custom_props={'name': 'BEGOU', 'code': 'R99D1M1', 'parent': district})
+        village = Location.objects.all() \
+            .filter(validity_to__isnull=True) \
+            .filter(name='Batha', type='V', parent=ward).first()
+        if not village:
+            village = create_test_location('V', custom_props={'name': 'Boua', 'code': 'R99D1M1V', 'parent': ward})
+        
         dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         resource = InsureeResource(user=self.user)
+        #with Patch("ImportExportConfig.im_export_date_format", '%m/%d/%Y')
         with open(os.path.join(dir_path, 'tests/import_example.csv'), 'r') as f:
             imported_data = resource \
                 .validate_and_sort_dataset(Dataset(headers=InsureeResource.insuree_headers).load(f.read()))
@@ -70,4 +93,3 @@ class ImportInsureeTest(TestCase):
         result = InsureeResource(self.user).export().dict
         self.assertTrue(result)
 
-# todo expand tests

@@ -43,7 +43,7 @@ def get_locations_ids(row, regions, districts, municipalities, villages):
     uniq_district = uniq_region + "|" + district
     if uniq_district not in districts:
         district_model = Location.objects.all() \
-            .filter(validity_to__isnull=True, parent__id=regions[uniq_region]) \
+            .filter(validity_to__isnull=True, parent_id=regions[uniq_region]) \
             .filter(get_location_str_filter(district)).first()
         if district_model:
             districts[uniq_district] = district_model.id
@@ -54,7 +54,7 @@ def get_locations_ids(row, regions, districts, municipalities, villages):
     uniq_municipality = uniq_district + "|" + municipality
     if uniq_municipality not in municipalities:
         municipality_model = Location.objects.all() \
-            .filter(validity_to__isnull=True, parent__id=districts[uniq_district]) \
+            .filter(validity_to__isnull=True, parent_id=districts[uniq_district]) \
             .filter(get_location_str_filter(municipality)).first()
         if municipality_model:
             municipalities[uniq_municipality] = municipality_model.id
@@ -65,7 +65,7 @@ def get_locations_ids(row, regions, districts, municipalities, villages):
     uniq_village = uniq_municipality + "|" + village
     if uniq_village not in villages:
         village_model = Location.objects.all() \
-            .filter(validity_to__isnull=True, parent__id=municipalities[uniq_municipality]) \
+            .filter(validity_to__isnull=True, parent_id=municipalities[uniq_municipality]) \
             .filter(get_location_str_filter(village)).first()
         if village_model:
             villages[uniq_village] = village_model.id
@@ -94,8 +94,8 @@ def validate_and_preprocess(dataset):
 
     insuree_no_seen = set()
 
-    for idx, row in enumerate(dataset.dict):
-
+    # we don't process 
+    for idx, row in enumerate(dataset.dict, start=1):
         row_str = ''.join([str(col or '') for col in row])
         if row_str.strip() == '':
             empty_indices.append(idx)
@@ -205,8 +205,8 @@ class InsureeResource(resources.ModelResource):
         @param queryset: Queryset to use for export, Default to full quetyset
         """
         super().__init__()
-        self._user = user
         self._queryset = queryset
+        self._user = user
 
     @classmethod
     def validate_and_sort_dataset(cls, dataset):
@@ -221,10 +221,9 @@ class InsureeResource(resources.ModelResource):
     def import_obj(self, instance, row, dry_run, **kwargs):
         instance.head = row['head']
         instance.current_village_id = row['village_id']
-
         if not instance.id:
             instance.card_issued = False
-            instance.audit_user_id = self._user.i_user.id
+        
 
         if not instance.head:
             family = Family.objects.all().filter(validity_to__isnull=True) \
@@ -239,15 +238,22 @@ class InsureeResource(resources.ModelResource):
         # important to be at the end
         super().import_obj(instance, row, dry_run, **kwargs)
 
-    def after_save_instance(self, instance, using_transactions, dry_run):
-        super().after_save_instance(instance, using_transactions, dry_run)
+    def after_save_instance(self, instance, row,  **kwargs):
+        super().after_save_instance(instance, row, **kwargs)
         if instance.head:
             # if not using_transactions and dry_run this code will cause changes in database on dry run
-            if using_transactions or not dry_run:
+            if not kwargs.get('using_transactions', False) or not kwargs.get('dry_run', False):
                 instance.family = self.create_family(instance)
                 instance.current_village = None
                 instance.save()
-
+    def before_save_instance(self, instance, row, **kwargs):
+        if hasattr(instance, 'audit_user_id'):
+            if self._user and self._user._u.id:
+                instance.audit_user_id = self._user._u.id
+            else:
+                instance.audit_user_id = -1
+                logger.warning(_("im_export.save_without_user"))
+        
     def create_family(self, instance):
         return Family.objects.create(**{
             'validity_from': datetime.now(),
