@@ -510,7 +510,7 @@ class FamilyImportExportService:
                                     if current_contribution and contribution_plan_code:
                                         policy_data["family_id"] = parent_family.id
                                         if Policy.objects.filter(
-                                            family=sub_family, validity_to__isnull=True
+                                            family=parent_family, validity_to__isnull=True
                                         ).count() == 0:
                                             logger.info("La police pour la famille %s sera cree plus tard", parent_family.id)
                                             # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
