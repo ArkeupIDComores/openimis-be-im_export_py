@@ -288,8 +288,8 @@ class FamilyImportExportService:
                         sub_family = None
                         number_count = 0
                         sub_family_count = 0
+                        policies = []
                         for r in sorted_members:
-                            policies = []
                             number_count += 1
                             logger.info(parent_family)
                             yob = r.get("Année de naissance")
@@ -567,8 +567,8 @@ class FamilyImportExportService:
                                 sub_family.save()
                             logger.info("creation groupe d'itentification ok.......")
                             logger.info("policies %s", policies)
-                            for police_data in policies:
-                                PolicyService(self._user).update_or_create(police_data, self._user)
+                        for police_data in policies:
+                            PolicyService(self._user).update_or_create(police_data, self._user)
                 logger.info("Fin du traitement d'import.......")
         except Exception as e:
             return InsureeImportExportService._get_general_error('FAILED TO IMPORT FILE: ', e)
