@@ -509,10 +509,13 @@ class FamilyImportExportService:
                                     # si c'est poligame c'est la sous famille qui aura la police
                                     if current_contribution and contribution_plan_code:
                                         policy_data["family_id"] = parent_family.id
-                                        logger.info("La police pour la famille %s sera cree plus tard", parent_family.id)
-                                        # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
-                                        # logger.info("policy_created %s", policy_created.id)
-                                        policies.append(policy_data)
+                                        if Policy.objects.filter(
+                                            family=sub_family, validity_to__isnull=True
+                                        ).count() == 0:
+                                            logger.info("La police pour la famille %s sera cree plus tard", parent_family.id)
+                                            # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
+                                            # logger.info("policy_created %s", policy_created.id)
+                                            policies.append(policy_data)
                                 if marital == "P":
                                     #polygamous with should create 1 subfamily
                                     jsonextsub = {}
@@ -540,10 +543,13 @@ class FamilyImportExportService:
                                     parent_family.head_insuree.save()
                                     if current_contribution and contribution_plan_code:
                                         policy_data["family_id"] = sub_family.id
-                                        logger.info("Creation police pour la sous famille %s", sub_family.id)
-                                        policies.append(policy_data)
-                                        # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
-                                        # logger.info("sub family policy to create later")
+                                        if Policy.objects.filter(
+                                            family=sub_family, validity_to__isnull=True
+                                        ).count() == 0:
+                                            logger.info("La police pour la sous famille %s sera cree plus tard", sub_family.id)
+                                            policies.append(policy_data)
+                                            # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
+                                            # logger.info("sub family policy to create later")
                             else:
                                 # On ajoute l'assurée comme membre de la famille ou sous famille existante
                                 if sub_family:
