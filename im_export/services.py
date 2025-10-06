@@ -282,7 +282,6 @@ class FamilyImportExportService:
                 for identification, rows in grouped.items():
                     logger.info(f"Memmbers for Identification = {identification}:")
                     if identification:
-                        policies = []
                         # Mise par Ordre de membre_de_menage ascendant en commencant par le chef de famille
                         sorted_members = sorted(rows, key=lambda x: int(x['Membresménage']) if x['Membresménage'] not in [None, ""] else -1)
                         parent_family = None
@@ -290,6 +289,7 @@ class FamilyImportExportService:
                         number_count = 0
                         sub_family_count = 0
                         for r in sorted_members:
+                            policies = []
                             number_count += 1
                             logger.info(parent_family)
                             yob = r.get("Année de naissance")
