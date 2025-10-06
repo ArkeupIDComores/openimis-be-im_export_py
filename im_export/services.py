@@ -290,6 +290,7 @@ class FamilyImportExportService:
                         number_count = 0
                         for r in sorted_members:
                             number_count += 1
+                            sub_family_count = 0
                             logger.info(parent_family)
                             yob = r.get("Année de naissance")
                             if yob is None or yob == "-999999999" or len(str(yob)) != 4 or yob == "":
@@ -543,9 +544,10 @@ class FamilyImportExportService:
                                     parent_family.head_insuree.save()
                                     if current_contribution and contribution_plan_code:
                                         policy_data["family_id"] = sub_family.id
-                                        if number_count == 1:
+                                        if sub_family_count == 0:
                                             logger.info("La police pour la sous famille %s sera cree plus tard", sub_family.id)
                                             policies.append(policy_data)
+                                            sub_family_count += 1
                                             # policy_created = PolicyService(self._user).update_or_create(policy_data, self._user)
                                             # logger.info("sub family policy to create later")
                             else:
