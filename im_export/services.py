@@ -552,8 +552,9 @@ class FamilyImportExportService:
                                     fid = parent_family.id
                                 head_insuree_data["family_id"] = fid
                                 head_insuree_data["json_ext"] = str(copy.copy(head_insuree_data))
-
+                                logger.info("creation assure simple pour la famille %s", fid)
                             insuree = InsureeService(self._user).create_or_update(head_insuree_data)
+                            logger.info("Assuree cree %s", insuree)
                             if sub_family and number_count == 2:
                                 sub_family.head_insuree_id = insuree.id
                                 insuree.head = True
@@ -596,8 +597,8 @@ class BankImportService:
             try:
                 chf_id = str(int(row[0])) if isinstance(row[0], float) else str(row[0]).strip()
                 date = row[2]
-                description = str(row[5]).strip()
-                amount_raw = row[4]
+                description = str(row[3]).strip()
+                amount_raw = row[1]
 
                 if not amount_raw:
                     raise ValueError("Montant manquant ou vide")
@@ -609,7 +610,7 @@ class BankImportService:
                 if amount > 0:
                     transactions.append({
                         "insuree_chf_id": chf_id,
-                        "date": date.isoformat() if isinstance(date, datetime) else str(date),
+                        "date": date.isoformat() if isinstance(date, datetime) else datetime.strptime(str(date).strip(), "%m/%d/%Y").isoformat(),
                         "description": description,
                         "amount": str(amount),
                         "code_tp": "BDC",
@@ -618,7 +619,7 @@ class BankImportService:
                         "label": description,
                         "fees": "0.00",
                         "amount_received": str(amount),
-                        "date_payment": date.isoformat() if isinstance(date, datetime) else str(date),
+                        "date_payment": date.isoformat() if isinstance(date, datetime) else datetime.strptime(str(date).strip(), "%m/%d/%Y").isoformat(),
                         "payment_origin": "Banque",
                         "payer_ref": chf_id,
                     })
